@@ -1,0 +1,6 @@
+{
+  "name": "Dentistae Dental Care — Banjara Hills Front Desk",
+  "description": "Patient reception assistant and staff triage portal for Dentistae Dental Care in Banjara Hills, Hyderabad.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
