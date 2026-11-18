@@ -92,9 +92,9 @@ export function StaffPortalPage({
     setRawJsonText(JSON.stringify(normalized, null, 2));
   }, [clinicData]);
 
-  // Tick ageing timer every 30s
+  // Tick ageing timer every 10s
   useEffect(() => {
-    const t = window.setInterval(() => setNowMs(Date.now()), 30000);
+    const t = window.setInterval(() => setNowMs(Date.now()), 10000);
     return () => window.clearInterval(t);
   }, []);
 
@@ -389,12 +389,23 @@ export function StaffPortalPage({
               filteredTickets.map((ticket) => {
                 const age = formatAge(ticket.createdAt, nowMs);
                 const priority = getPriorityText(ticket, age.minutes);
+                const priorityCode =
+                  ticket.status === 'urgent'
+                    ? 'P1'
+                    : ticket.status === 'needs human'
+                      ? 'P2'
+                      : ticket.status === 'answered'
+                        ? 'P3'
+                        : 'P4';
 
                 return (
                   <article
                     key={ticket.id}
                     data-ticket={ticket.id}
                     data-status={ticket.status}
+                    data-priority={priorityCode}
+                    data-age-minutes={age.minutes}
+                    data-booking-time={ticket.bookingTime || ''}
                     className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-4"
                   >
                     {/* Metadata Row (Unboxed clean typography with separators) */}
@@ -416,7 +427,10 @@ export function StaffPortalPage({
                         <span aria-hidden="true">·</span>
                         <span className="inline-flex items-center gap-1 tabular-nums">
                           <Clock className="w-3.5 h-3.5" aria-hidden="true" />
-                          {age.label}
+                          Age: {age.label} ({new Date(ticket.createdAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })})
                         </span>
                         <span aria-hidden="true">·</span>
                         <span>Status: {ticket.status}</span>
@@ -700,6 +714,71 @@ export function StaffPortalPage({
                             }),
                             sunday: e.target.value,
                           },
+                        })
+                      }
+                      className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Lunch Break
+                    </label>
+                    <input
+                      type="text"
+                      value={draftClinic.timings?.lunchBreak ?? ''}
+                      onChange={(e) =>
+                        setDraftClinic({
+                          ...draftClinic,
+                          timings: {
+                            ...(draftClinic.timings ?? {
+                              weekdays: '',
+                              sunday: '',
+                              lunchBreak: '',
+                            }),
+                            lunchBreak: e.target.value,
+                          },
+                        })
+                      }
+                      className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Landmark
+                    </label>
+                    <input
+                      type="text"
+                      value={draftClinic.landmark}
+                      onChange={(e) =>
+                        setDraftClinic({ ...draftClinic, landmark: e.target.value })
+                      }
+                      className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={draftClinic.email}
+                      onChange={(e) =>
+                        setDraftClinic({ ...draftClinic, email: e.target.value })
+                      }
+                      className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Parking & Accessibility
+                    </label>
+                    <input
+                      type="text"
+                      value={draftClinic.parkingAndAccess}
+                      onChange={(e) =>
+                        setDraftClinic({
+                          ...draftClinic,
+                          parkingAndAccess: e.target.value,
                         })
                       }
                       className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm"

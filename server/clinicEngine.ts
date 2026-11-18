@@ -37,7 +37,12 @@ export function detectLanguage(text: string): LanguageCode {
     'entha',
     'eppudu',
     'ekkada',
+    'ekada',
     'evaru',
+    'enti',
+    'ela',
+    'meeku',
+    'meeru',
     'noppi',
     'pallu',
     'raktham',
@@ -50,6 +55,11 @@ export function detectLanguage(text: string): LanguageCode {
     'repu',
     'ivvala',
     'mandulu',
+    'udhayam',
+    'udayam',
+    'sayantram',
+    'madhyahnam',
+    'gantalaku',
   ];
   const hindiHints = [
     'kitna',
@@ -66,12 +76,20 @@ export function detectLanguage(text: string): LanguageCode {
     'samay',
     'kahan',
     'khulta',
+    'khula',
     'band',
     'namaste',
     'kal subah',
     'kal shaam',
+    'aaj',
+    'subah',
+    'shaam',
+    'baje',
     'dawai',
     'hindi',
+    'aapka',
+    'kaise',
+    'chhutti',
   ];
   if (teluguHints.some((w) => new RegExp(`\\b${w}\\b`, 'i').test(lower))) {
     return 'te';
@@ -182,25 +200,19 @@ function extractBookingRequest(
   clinicData: ClinicData,
 ): { isBooking: boolean; bookingTime?: string } {
   const lower = text.toLowerCase();
-  const bookingIntent =
-    /\b(book|schedule|appointment|slot|reserve|fix\s+a\s+visit|want\s+to\s+visit|come\s+in|consult)\b/i.test(
-      lower,
-    ) ||
-    /appointment\s+chahiye|book\s+karna|मिलना\s+है|अपॉइंटमेंट/i.test(text) ||
-    /అపాయింట్మెంట్|బుక్\s+చేయండి/i.test(text);
-
-  if (!bookingIntent) {
-    return { isBooking: false };
-  }
 
   // Extract day/date
   const dayMatch = text.match(
-    /\b(today|tomorrow|day\s+after\s+tomorrow|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun|kal|aaj|repu|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?|\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)\b/i,
+    /\b(today|tomorrow|day\s+after\s+tomorrow|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun|kal|aaj|repu|ivvala|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?|\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)\b|आज|कल|ఈరోజు|రేపు/i,
   );
-  // Extract time
-  const timeMatch = text.match(
-    /\b(\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.))\b|\bat\s+(\d{1,2}(?::\d{2})?(?:\s*(?:am|pm|a\.m\.|p\.m\.))?)\b|\b(morning|afternoon|evening|subah|shaam|dopahar|udayam|sayantram)\b/i,
+  // Extract time (prioritize explicit clock time over general time-of-day)
+  const clockTimeMatch = text.match(
+    /\b(\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.))\b|\bat\s+(\d{1,2}(?::\d{2})?(?:\s*(?:am|pm|a\.m\.|p\.m\.))?)\b|\b(\d{1,2}(?::\d{2})?\s*(?:baje|gantalaku))\b/i,
   );
+  const partOfDayMatch = text.match(
+    /\b(morning|afternoon|evening|subah|shaam|dopahar|udayam|udhayam|sayantram|madhyahnam)\b|सुबह|शाम|दोपहर|ఉదయం|సాయంత్రం|మధ్యాహ్నం/i,
+  );
+  const timeMatch = clockTimeMatch || partOfDayMatch;
 
   // Extract doctor if mentioned
   const matchedDoc = clinicData.doctors.find((doc) => {
@@ -212,9 +224,28 @@ function extractBookingRequest(
     return tokens.some((token) => lower.includes(token));
   });
 
+  const explicitBookingIntent =
+    /\b(book|schedule|appointment|slot|reserve|fix\s+a\s+visit|want\s+to\s+visit|come\s+in|consult|see\s+(?:dr|doctor|the\s+dentist)|meet\s+(?:dr|doctor))\b/i.test(
+      lower,
+    ) ||
+    /appointment\s+chahiye|book\s+karna|मिलना\s+है|अपॉइंटमेंट|बुक/i.test(text) ||
+    /అపాయింట్మెంట్|బుక్\s+చేయండి|కలవాలి/i.test(text);
+
+  // Also treat short standalone slot replies like "Tomorrow at 4 PM" or "Saturday 11am" as a booking request
+  const isStandaloneSlotMessage =
+    text.trim().length <= 64 &&
+    Boolean(dayMatch && timeMatch) &&
+    !/\b(open|close|closing|timing|timings|hours|price|cost|fee|when)\b|\?/i.test(text);
+
+  if (!explicitBookingIntent && !isStandaloneSlotMessage) {
+    return { isBooking: false };
+  }
+
   const parts: string[] = [];
   if (dayMatch) parts.push(dayMatch[0].trim());
-  if (timeMatch) parts.push((timeMatch[1] || timeMatch[2] || timeMatch[3] || timeMatch[0]).trim());
+  if (timeMatch) {
+    parts.push((timeMatch[1] || timeMatch[2] || timeMatch[3] || timeMatch[0]).trim());
+  }
   if (matchedDoc) parts.push(`with ${matchedDoc.name}`);
 
   return {
@@ -442,19 +473,17 @@ function answerFromClinicFile(
   const asksDoctorsGeneral =
     /\b(doctors?|dentists?|specialists?|orthodontist|endodontist|surgeon|staff|team|who\s+is)\b/i.test(
       lower,
-    ) || /evaru|డాక్టర్లు|डॉक्टर/i.test(message);
+    ) || /evaru|డాక్టర్|వైద్యుల|వైద్యుడ|డెంటిస్ట్|डॉक्टर|चिकित्सक|डेंटिस्ट/i.test(message);
 
-  // 2. Specific service/price match (dynamic from clinicData.services)
+  // 2. Specific service/price match (dynamic from clinicData.services; prioritize name matches over notes)
   const msgTokens = tokenize(message).filter((t) => !STOPWORDS.has(t));
-  const matchedServices = clinicData.services.filter((srv) => {
+  const matchesServiceByNameOrSynonym = (srv: ClinicData['services'][number]): boolean => {
     const srvLower = srv.name.toLowerCase();
-    const notesLower = (srv.notes || '').toLowerCase();
     if (lower.includes(srvLower)) return true;
 
-    const srvTokens = tokenize(`${srv.name} ${srv.notes || ''}`).filter(
-      (t) => !STOPWORDS.has(t) && t.length >= 4,
+    const srvNameTokens = tokenize(srv.name).filter(
+      (t) => !STOPWORDS.has(t) && t.length >= 3,
     );
-    // Synonym bridge for common dental queries (English, Hindi, Telugu)
     const synonymMatches =
       ((lower.includes('rct') || /रूट\s*कैनाल|రూట్\s*కెనాల్/.test(message)) &&
         srvLower.includes('root canal')) ||
@@ -492,47 +521,54 @@ function answerFromClinicFile(
         srvLower.includes('consult'));
 
     if (synonymMatches) return true;
-
-    return srvTokens.some(
-      (st) =>
-        msgTokens.some((mt) => mt === st || (mt.length >= 5 && st.includes(mt))) ||
-        notesLower.includes(msgTokens[0] || '___'),
+    return srvNameTokens.some((st) =>
+      msgTokens.some((mt) => mt === st || (mt.length >= 5 && st.includes(mt))),
     );
-  });
+  };
+
+  let matchedServices = clinicData.services.filter(matchesServiceByNameOrSynonym);
+  if (matchedServices.length === 0) {
+    matchedServices = clinicData.services.filter((srv) => {
+      const notesTokens = tokenize(srv.notes || '').filter(
+        (t) => !STOPWORDS.has(t) && t.length >= 4,
+      );
+      return notesTokens.some((nt) => msgTokens.includes(nt));
+    });
+  }
 
   const asksPricesGeneral =
     /\b(price|prices|cost|fee|fees|tariff|tariffs|charges|rate|rates|menu|how\s+much)\b/i.test(
       lower,
-    ) || /kitna|kharch|paisa|entha|ధర|ఖర్చు|कितना|खर्च/i.test(message);
+    ) || /kitna|kharch|paisa|entha|ధర|ఖర్చు|ఫీజు|ఫీస్|రేటు|చార్జీ|कितना|खर्च|फीस|चार्ज|दाम|पैसे|रुपये/i.test(message);
 
   // 3. Timings
   const asksTimings =
     /\b(timing|timings|hours|open|close|closing|opening|sunday|saturday|weekday|weekends?|lunch|schedule)\b/i.test(
       lower,
-    ) || /samay|kab|khulta|eppudu|samayam|సమయం|ఎప్పుడు|समय|कब/i.test(message);
+    ) || /samay|kab|khulta|eppudu|samayam|సమయ|వేళ|ఎప్పుడు|తెరిచి|మూసి|ఆదివారం|టైమింగ్|समय|कब|खुलता|बंद|रविवार|टाइमिंग/i.test(message);
 
   // 4. Location / Parking
   const asksLocation =
     /\b(where|location|address|directions?|landmark|banjara|road\s*no|parking|valet|wheelchair|reach|map)\b/i.test(
       lower,
-    ) || /kahan|ekkada|ఎక్కడ|कहाँ/i.test(message);
+    ) || /kahan|ekkada|ఎక్కడ|చిరునామా|అడ్రస్|లొకేషన్|పార్కింగ్|బంజారా|कहाँ|कहां|पता|लोकेशन|पार्किंग|बंजारा/i.test(message);
 
   // 5. Insurance
   const asksInsurance =
     /\b(insurance|cashless|reimbursement|claim|tpa|star\s+health|hdfc|icici|bajaj|opd\s+cover)\b/i.test(
       lower,
-    ) || /బీమా|बीमा/i.test(message);
+    ) || /బీమా|ఇన్సూరెన్స్|క్యాష్‌లెస్|రీయింబర్స్|बीमा|इंश्योरेंस|कैशलेस/i.test(message);
 
   // 6. Policies / Payment
   const asksPolicies =
     /\b(polic|cancel|reschedul|walk[\s-]?in|payment|pay|upi|gpay|phonepe|card|cash|emi|sterilis|steriliz|autoclave|senior\s+citizen|discount)\b/i.test(
       lower,
-    ) || /నియమాలు|नियम|पेमेंट/i.test(message);
+    ) || /నియమ|పాలసీ|చెల్లింపు|పేమెంట్|రద్దు|నగదు|యూపీఐ|नियम|पॉलिसी|पेमेंट|भुगतान|रद्द|कैंसिल/i.test(message);
 
   // 7. Contact
   const asksContact =
     /\b(phone|number|call|contact|email|helpline)\b/i.test(lower) ||
-    /ఫోన్|నంబర్|फोन|नंबर/i.test(message);
+    /ఫోన్|నంబర్|కాల్|సంప్రదింపు|ఇమెయిల్|फोन|नंबर|कॉल|संपर्क|ईमेल/i.test(message);
 
   const sections: string[] = [];
 
@@ -657,9 +693,19 @@ function answerFromClinicFile(
   }
 
   if (asksContact) {
-    sections.push(
-      `Contact Details:\n• Front Desk: ${clinicData.phone}\n• Emergency Dental Line: ${clinicData.emergencyPhone}\n• Email: ${clinicData.email}`,
-    );
+    if (lang === 'hi') {
+      sections.push(
+        `संपर्क विवरण:\n• फ्रंट डेस्क: ${clinicData.phone}\n• 24/7 आपातकालीन डेंटल लाइन: ${clinicData.emergencyPhone}\n• ईमेल: ${clinicData.email}`,
+      );
+    } else if (lang === 'te') {
+      sections.push(
+        `సంప్రదింపు వివరాలు:\n• ఫ్రంట్ డెస్క్: ${clinicData.phone}\n• 24/7 ఎమర్జెన్సీ డెంటల్ లైన్: ${clinicData.emergencyPhone}\n• ఇమెయిల్: ${clinicData.email}`,
+      );
+    } else {
+      sections.push(
+        `Contact Details:\n• Front Desk: ${clinicData.phone}\n• Emergency Dental Line: ${clinicData.emergencyPhone}\n• Email: ${clinicData.email}`,
+      );
+    }
   }
 
   if (sections.length === 0) {

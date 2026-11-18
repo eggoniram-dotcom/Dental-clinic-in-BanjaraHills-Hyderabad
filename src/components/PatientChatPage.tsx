@@ -25,6 +25,8 @@ const QUICK_REPLIES = [
   { label: 'Insurance', prompt: 'How does insurance reimbursement work?' },
   { label: 'Location', prompt: 'Where is the clinic located in Banjara Hills?' },
   { label: 'Book slot', prompt: 'I want to book an appointment tomorrow at 4:00 PM' },
+  { label: 'हिन्दी (समय)', prompt: 'क्लिनिक का समय और कंसल्टेशन फीस क्या है?' },
+  { label: 'తెలుగు (వేళలు)', prompt: 'క్లినిక్ వేళలు మరియు ధరలు చెప్పండి' },
 ];
 
 function getInitialSessionId(hasAutoQuery: boolean): string {
@@ -378,6 +380,7 @@ export function PatientChatPage({ clinicData }: PatientChatPageProps) {
                 <button
                   key={qr.label}
                   type="button"
+                  data-quick-reply={qr.label}
                   disabled={isSending}
                   onClick={() => void sendMessage(qr.prompt)}
                   className="px-3 py-2 min-h-[40px] rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 text-xs font-medium text-slate-700 hover:text-emerald-950 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50"
