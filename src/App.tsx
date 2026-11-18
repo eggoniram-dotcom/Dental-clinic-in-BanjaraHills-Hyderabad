@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { PatientChatPage } from './components/PatientChatPage.tsx';
 import { StaffPortalPage } from './components/StaffPortalPage.tsx';
 import { TopBar } from './components/TopBar.tsx';
+import { apiGetClinicData } from './lib/clinicApi.ts';
 import { normalizeClinicData, type ClinicData } from './types.ts';
 
 const INITIAL_CLINIC_DATA: ClinicData = normalizeClinicData(null);
@@ -13,19 +14,19 @@ export default function App() {
   const [clinicData, setClinicData] = useState<ClinicData>(INITIAL_CLINIC_DATA);
 
   const loadClinicData = useCallback(async () => {
-    try {
-      const res = await fetch('/api/clinic-data');
-      if (res.ok) {
-        const data = (await res.json()) as Partial<ClinicData>;
-        setClinicData(normalizeClinicData(data));
-      }
-    } catch {
-      // Keep fallback initial clinic data
-    }
+    const data = await apiGetClinicData();
+    setClinicData(data);
   }, []);
 
   useEffect(() => {
     void loadClinicData();
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'dentistae_clinic_data_v1') {
+        void loadClinicData();
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, [loadClinicData]);
 
   useEffect(() => {

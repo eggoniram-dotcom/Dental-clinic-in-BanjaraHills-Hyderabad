@@ -1,0 +1,729 @@
+import {
+  normalizeClinicData,
+  type ChatMessage,
+  type ClinicData,
+  type LanguageCode,
+  type Ticket,
+  type TicketStatus,
+} from '../types.ts';
+import { DEFAULT_CLINIC_DATA } from './defaultClinicData.ts';
+
+const LS_CLINIC_KEY = 'dentistae_clinic_data_v1';
+const LS_TICKETS_KEY = 'dentistae_tickets_v1';
+const LS_SESSIONS_KEY = 'dentistae_sessions_v1';
+
+const PRIORITY_WEIGHT: Record<TicketStatus, number> = {
+  urgent: 0,
+  'needs human': 1,
+  answered: 2,
+  closed: 3,
+};
+
+function readStorage<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStorage(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export function localGetClinicData(): ClinicData {
+  const stored = readStorage<Partial<ClinicData> | null>(LS_CLINIC_KEY, null);
+  if (!stored) {
+    const fresh = normalizeClinicData(DEFAULT_CLINIC_DATA);
+    writeStorage(LS_CLINIC_KEY, fresh);
+    return fresh;
+  }
+  return normalizeClinicData(stored);
+}
+
+export function localUpdateClinicData(next: Partial<ClinicData>): ClinicData {
+  const updated: ClinicData = {
+    ...normalizeClinicData(next),
+    updatedAt: new Date().toISOString(),
+  };
+  writeStorage(LS_CLINIC_KEY, updated);
+  return updated;
+}
+
+export function localResetClinicData(): ClinicData {
+  const fresh: ClinicData = {
+    ...normalizeClinicData(DEFAULT_CLINIC_DATA),
+    updatedAt: new Date().toISOString(),
+  };
+  writeStorage(LS_CLINIC_KEY, fresh);
+  return fresh;
+}
+
+export function localGetSessionMessages(sessionId: string): ChatMessage[] {
+  const sessions = readStorage<Record<string, ChatMessage[]>>(LS_SESSIONS_KEY, {});
+  return sessions[sessionId] ?? [];
+}
+
+function localAppendSessionMessage(message: ChatMessage): ChatMessage[] {
+  const sessions = readStorage<Record<string, ChatMessage[]>>(LS_SESSIONS_KEY, {});
+  const list = sessions[message.sessionId] ?? [];
+  list.push(message);
+  sessions[message.sessionId] = list;
+  writeStorage(LS_SESSIONS_KEY, sessions);
+  return list;
+}
+
+export function localGetAllTickets(): Ticket[] {
+  const tickets = readStorage<Ticket[]>(LS_TICKETS_KEY, []);
+  return [...tickets].sort((a, b) => {
+    const pDiff = PRIORITY_WEIGHT[a.status] - PRIORITY_WEIGHT[b.status];
+    if (pDiff !== 0) return pDiff;
+    if (a.status === 'urgent' || a.status === 'needs human') {
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    }
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  });
+}
+
+function localCreateTicket(input: {
+  sessionId: string;
+  patientName?: string;
+  question: string;
+  status: TicketStatus;
+  category: Ticket['category'];
+  bookingTime?: string;
+}): Ticket {
+  const tickets = readStorage<Ticket[]>(LS_TICKETS_KEY, []);
+  const now = new Date().toISOString();
+  const ticket: Ticket = {
+    id: `TKT-${String(tickets.length + 101)}`,
+    sessionId: input.sessionId,
+    patientName: input.patientName?.trim() || 'Patient',
+    question: input.question,
+    status: input.status,
+    category: input.category,
+    bookingTime: input.bookingTime,
+    createdAt: now,
+    updatedAt: now,
+    replies: [],
+  };
+  tickets.push(ticket);
+  writeStorage(LS_TICKETS_KEY, tickets);
+  return ticket;
+}
+
+export function localAddTicketReply(
+  ticketId: string,
+  replyText: string,
+  nextStatus: TicketStatus = 'answered',
+): { ticket: Ticket; messages: ChatMessage[] } | null {
+  const tickets = readStorage<Ticket[]>(LS_TICKETS_KEY, []);
+  const index = tickets.findIndex((t) => t.id === ticketId);
+  if (index === -1) return null;
+
+  const now = new Date().toISOString();
+  const ticket = tickets[index];
+  ticket.replies.push({
+    id: `rep-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    sender: 'staff',
+    text: replyText.trim(),
+    timestamp: now,
+  });
+  ticket.status = nextStatus;
+  ticket.updatedAt = now;
+  tickets[index] = ticket;
+  writeStorage(LS_TICKETS_KEY, tickets);
+
+  const messages = localAppendSessionMessage({
+    id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    sessionId: ticket.sessionId,
+    sender: 'staff',
+    text: replyText.trim(),
+    timestamp: now,
+    ticketId: ticket.id,
+  });
+
+  return { ticket, messages };
+}
+
+export function localUpdateTicketStatus(
+  ticketId: string,
+  status: TicketStatus,
+): Ticket | null {
+  const tickets = readStorage<Ticket[]>(LS_TICKETS_KEY, []);
+  const index = tickets.findIndex((t) => t.id === ticketId);
+  if (index === -1) return null;
+  tickets[index].status = status;
+  tickets[index].updatedAt = new Date().toISOString();
+  writeStorage(LS_TICKETS_KEY, tickets);
+  return tickets[index];
+}
+
+function detectLanguage(text: string): LanguageCode {
+  if (/[\u0C00-\u0C7F]/.test(text)) return 'te';
+  if (/[\u0900-\u097F]/.test(text)) return 'hi';
+  const lower = text.toLowerCase();
+  const teluguHints = [
+    'entha',
+    'eppudu',
+    'ekkada',
+    'evaru',
+    'noppi',
+    'pallu',
+    'raktham',
+    'vapu',
+    'cheppandi',
+    'kavali',
+    'samayam',
+    'namaskaram',
+    'telugu',
+    'repu',
+    'ivvala',
+    'mandulu',
+  ];
+  const hindiHints = [
+    'kitna',
+    'kharch',
+    'paisa',
+    'daant',
+    'dant',
+    'dard',
+    'sujan',
+    'khoon',
+    'batao',
+    'bataiye',
+    'chahiye',
+    'samay',
+    'kahan',
+    'khulta',
+    'band',
+    'namaste',
+    'kal subah',
+    'kal shaam',
+    'dawai',
+    'hindi',
+  ];
+  if (teluguHints.some((w) => new RegExp(`\\b${w}\\b`, 'i').test(lower))) return 'te';
+  if (hindiHints.some((w) => new RegExp(`\\b${w}\\b`, 'i').test(lower))) return 'hi';
+  return 'en';
+}
+
+function isRuleOverrideOrDiscountDemand(text: string): boolean {
+  const lower = text.toLowerCase();
+  const overridePatterns = [
+    /ignore\s+(all\s+)?(your\s+|previous\s+)?(rules|instructions|guidelines|system)/i,
+    /forget\s+(all\s+)?(your\s+|previous\s+)?(rules|instructions|guidelines)/i,
+    /disregard\s+(all\s+)?(your\s+)?(rules|instructions)/i,
+    /override\s+(your\s+)?(rules|policy|policies)/i,
+    /bypass\s+(your\s+)?(rules|policy)/i,
+    /system\s*prompt/i,
+    /jailbreak/i,
+    /you\s+are\s+now\s+/i,
+    /pretend\s+you\s+(can|are)/i,
+  ];
+  if (overridePatterns.some((p) => p.test(lower))) return true;
+  const discountDemandPatterns = [
+    /promise\s+(me\s+)?(a\s+)?discount/i,
+    /give\s+(me\s+)?(a\s+)?(\d+%?\s*)?discount/i,
+    /\b\d+%\s*(off|discount)\b/i,
+    /special\s+discount/i,
+    /waive\s+(the\s+)?fee/i,
+    /free\s+(root\s+canal|cleaning|scaling|implant|treatment|filling|crown)/i,
+    /reduce\s+(the\s+)?(price|cost|fee|charges)/i,
+    /discount\s+(milega|de\s+do|isthara|kavali|please)/i,
+  ];
+  return discountDemandPatterns.some((p) => p.test(lower));
+}
+
+function isEmergencyMessage(text: string): boolean {
+  const lower = text.toLowerCase();
+  const patterns = [
+    /knocked[\s-]?out\s+(my\s+)?tooth/i,
+    /tooth\s+(fell|came)\s+out/i,
+    /avulsed/i,
+    /(heavy|severe|uncontrolled|non[\s-]?stop|continuous|lot\s+of)\s+bleeding/i,
+    /bleeding\s+(heavily|non[\s-]?stop|won't\s+stop|will\s+not\s+stop|a\s+lot)/i,
+    /(facial|face|jaw|cheek|neck)\s+swelling/i,
+    /swelling.*(fever|breathing|swallow)/i,
+    /(can't|cannot|hard\s+to|trouble|difficulty)\s+(breathe|breathing|swallow|swallowing)/i,
+    /(jaw|tooth)\s+(fracture|broken|shattered)/i,
+    /(car|bike|road|fall)\s+(accident|trauma|injury)/i,
+    /\bemergency\b/i,
+    /unbearable\s+pain/i,
+    /khoon\s+(beh|aa\s+raha|nahi\s+ruk)/i,
+    /bahut\s+zyada\s+(dard|sujan)/i,
+    /రక్తం\s*(ఆగడం\s*లేదు|ఎక్కువగా)/,
+    /తీవ్రమైన\s*(నొప్పి|వాపు)/,
+    /ప్రమాదం/,
+  ];
+  return patterns.some((p) => p.test(lower));
+}
+
+function isMedicalAdviceOrSymptom(text: string): boolean {
+  const lower = text.toLowerCase();
+  const symptomPatterns = [
+    /tooth\s*ache/i,
+    /\bpain\b/i,
+    /\bache\b/i,
+    /\bhurts?\b/i,
+    /\bhurting\b/i,
+    /\bthrobbing\b/i,
+    /\bswelling\b/i,
+    /\bswollen\b/i,
+    /\bpus\b/i,
+    /\babscess\b/i,
+    /bleeding\s+gums?/i,
+    /gums?\s+bleed/i,
+    /\bsensitiv(e|ity)\b/i,
+    /(cold|hot)\s+(water|drink|food)/i,
+    /do\s+i\s+have\s+(a\s+)?(cavity|infection|abscess|decay|gum\s+disease)/i,
+    /do\s+i\s+need\s+(a\s+)?(root\s+canal|extraction|filling|antibiotic)/i,
+    /why\s+(does|is)\s+my\s+(tooth|teeth|gum|gums|jaw)/i,
+    /what\s+is\s+wrong\s+with\s+my/i,
+    /\b(diagnose|diagnosis|symptom|symptoms|infection|ulcer)\b/i,
+    /\b(antibiotic|amoxicillin|augmentin|metronidazole|painkiller|ibuprofen|paracetamol|dolo|combiflam|ketorol|aceclofenac|diclofenac|tablet|medicine|medication|pill|prescribe|prescription|dosage|clove\s+oil|home\s+remedy)\b/i,
+    /should\s+i\s+take/i,
+    /which\s+(medicine|tablet|painkiller|antibiotic)/i,
+    /can\s+i\s+take/i,
+    /\bdard\b/i,
+    /\bdawai\b/i,
+    /\bgoli\b/i,
+    /\bnoppi\b/i,
+    /\bmandulu\b/i,
+    /నొప్పి/,
+    /వాపు/,
+    /మందు/,
+    /दर्द/,
+    /सूजन/,
+    /दवा/,
+  ];
+  return symptomPatterns.some((p) => p.test(lower));
+}
+
+function extractBookingRequest(
+  text: string,
+  clinicData: ClinicData,
+): { isBooking: boolean; bookingTime?: string } {
+  const lower = text.toLowerCase();
+  const bookingIntent =
+    /\b(book|schedule|appointment|slot|reserve|fix\s+a\s+visit|want\s+to\s+visit|come\s+in|consult)\b/i.test(
+      lower,
+    ) ||
+    /appointment\s+chahiye|book\s+karna|मिलना\s+है|अपॉइंटमेंट/i.test(text) ||
+    /అపాయింట్మెంట్|బుక్\s+చేయండి/i.test(text);
+  if (!bookingIntent) return { isBooking: false };
+
+  const dayMatch = text.match(
+    /\b(today|tomorrow|day\s+after\s+tomorrow|tonight|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun|kal|aaj|repu|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?|\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)\b/i,
+  );
+  const timeMatch = text.match(
+    /\b(\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.))\b|\bat\s+(\d{1,2}(?::\d{2})?(?:\s*(?:am|pm|a\.m\.|p\.m\.))?)\b|\b(morning|afternoon|evening|subah|shaam|dopahar|udayam|sayantram)\b/i,
+  );
+  const matchedDoc = clinicData.doctors.find((doc) => {
+    const tokens = doc.name
+      .toLowerCase()
+      .replace(/^dr\.?\s*/i, '')
+      .split(/\s+/)
+      .filter((t) => t.length > 2);
+    return tokens.some((token) => lower.includes(token));
+  });
+
+  const parts: string[] = [];
+  if (dayMatch) parts.push(dayMatch[0].trim());
+  if (timeMatch) parts.push((timeMatch[1] || timeMatch[2] || timeMatch[3] || timeMatch[0]).trim());
+  if (matchedDoc) parts.push(`with ${matchedDoc.name}`);
+
+  return {
+    isBooking: true,
+    bookingTime:
+      parts.length > 0 ? parts.join(' · ') : 'Time not specified (callback requested)',
+  };
+}
+
+function tokenize(str: string): string[] {
+  return str
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length >= 3);
+}
+
+const STOPWORDS = new Set([
+  'the', 'and', 'for', 'with', 'you', 'your', 'are', 'how', 'much', 'what', 'when',
+  'where', 'does', 'have', 'cost', 'price', 'fees', 'fee', 'charges', 'charge',
+  'rate', 'rates', 'clinic', 'dental', 'doctor', 'doctors', 'tell', 'about', 'can',
+  'will', 'take', 'any', 'this', 'that', 'from', 'banjara', 'hills', 'hyderabad',
+  'dentistae',
+]);
+
+function formatUnanswered(clinicData: ClinicData, lang: LanguageCode): string {
+  if (lang === 'hi') {
+    return `क्षमा करें, मुझे इसका सटीक उत्तर हमारी क्लिनिक फाइल में नहीं मिला। मैंने फ्रंट डेस्क के लिए टिकट (needs human) बना दिया है, और कोई व्यक्ति 2 कार्य घंटों के भीतर (within 2 working hours) आपको कॉल बैक करेगा।`;
+  }
+  if (lang === 'te') {
+    return `క్షమించండి, ఈ సమాచారం మా క్లినిక్ ఫైల్‌లో అందుబాటులో లేదు. మా ఫ్రంట్ డెస్క్ కోసం టికెట్ (needs human) ఓపెన్ చేయబడింది, మరియు 2 పని గంటలలోపు (within 2 working hours) ఎవరైనా మీకు తిరిగి కాల్ చేస్తారు.`;
+  }
+  return `I am not sure about that as it is not listed in our clinic file at ${clinicData.clinicName}. I have opened a ticket for our front desk team, and someone will call back within 2 working hours.`;
+}
+
+function answerFromClinicFile(
+  message: string,
+  clinicData: ClinicData,
+  lang: LanguageCode,
+): { matched: boolean; reply: string } {
+  const lower = message.toLowerCase();
+
+  if (
+    /\b(personal\s+(phone|mobile|number|email)|home\s+address|private\s+number|gst\s+number|pan\s+number|wifi\s+password|franchise|job\s+opening|salary|internship)\b/i.test(
+      lower,
+    )
+  ) {
+    return { matched: false, reply: formatUnanswered(clinicData, lang) };
+  }
+
+  const knownUnlistedInsurers = [
+    'mediassist', 'medi assist', 'acko', 'niva bupa', 'max bupa', 'care health',
+    'religare', 'aditya birla', 'sbi general', 'united india', 'new india assurance',
+    'oriental insurance', 'tata aig', 'manipalcigna', 'cigna',
+  ];
+  const mentionedUnlistedInsurer = knownUnlistedInsurers.find(
+    (ins) =>
+      lower.includes(ins) &&
+      !clinicData.insurance.partners.some((p) => p.toLowerCase().includes(ins)),
+  );
+  if (mentionedUnlistedInsurer) {
+    return { matched: false, reply: formatUnanswered(clinicData, lang) };
+  }
+
+  const matchedDoctors = clinicData.doctors.filter((doc) => {
+    const nameTokens = tokenize(doc.name).filter((t) => t !== 'dr');
+    const specTokens = tokenize(doc.specialty).filter((t) => !STOPWORDS.has(t));
+    return (
+      nameTokens.some((t) => lower.includes(t)) ||
+      specTokens.some((t) => t.length >= 5 && lower.includes(t))
+    );
+  });
+
+  const asksDoctorsGeneral =
+    /\b(doctors?|dentists?|specialists?|orthodontist|endodontist|surgeon|staff|team|who\s+is)\b/i.test(
+      lower,
+    ) || /evaru|డాక్టర్లు|डॉक्टर/i.test(message);
+
+  const msgTokens = tokenize(message).filter((t) => !STOPWORDS.has(t));
+  const matchedServices = clinicData.services.filter((srv) => {
+    const srvLower = srv.name.toLowerCase();
+    const notesLower = (srv.notes || '').toLowerCase();
+    if (lower.includes(srvLower)) return true;
+
+    const srvTokens = tokenize(`${srv.name} ${srv.notes || ''}`).filter(
+      (t) => !STOPWORDS.has(t) && t.length >= 4,
+    );
+    const synonymMatches =
+      ((lower.includes('rct') || /रूट\s*कैनाल|రూట్\s*కెనాల్/.test(message)) &&
+        srvLower.includes('root canal')) ||
+      ((lower.includes('clean') ||
+        lower.includes('wash') ||
+        /सफाई|క్లీనింగ్|శుభ్రం/.test(message)) &&
+        srvLower.includes('scaling')) ||
+      ((lower.includes('cap') || lower.includes('crown') || /कैप|क्राउन|క్రౌన్/.test(message)) &&
+        srvLower.includes('crown')) ||
+      ((lower.includes('pull') ||
+        lower.includes('remove') ||
+        lower.includes('extract') ||
+        /निकालना|తీసివేత/.test(message)) &&
+        srvLower.includes('extract')) ||
+      (lower.includes('wisdom') && srvLower.includes('wisdom')) ||
+      ((lower.includes('x-ray') ||
+        lower.includes('xray') ||
+        lower.includes('x ray') ||
+        /एक्स[\s-]?रे|ఎక్స్[\s-]?రే/.test(message)) &&
+        srvLower.includes('x-ray')) ||
+      ((lower.includes('aligner') || lower.includes('invisalign')) &&
+        srvLower.includes('aligner')) ||
+      ((lower.includes('brace') || /ब्रेसेस|బ్రేసెస్/.test(message)) &&
+        srvLower.includes('brace')) ||
+      ((lower.includes('whiten') || /व्हाइटनिंग|వైటెనింగ్/.test(message)) &&
+        srvLower.includes('whiten')) ||
+      ((lower.includes('implant') || /इम्प्लांट|ఇంప్లాంట్/.test(message)) &&
+        srvLower.includes('implant')) ||
+      ((lower.includes('fill') || /फिलिंग|ఫిల్లింగ్/.test(message)) &&
+        srvLower.includes('filling')) ||
+      ((lower.includes('checkup') ||
+        lower.includes('check-up') ||
+        lower.includes('consult') ||
+        /कंसल्टेशन|చెక్[\s-]?అప్|కన్సల్టేషన్/.test(message)) &&
+        srvLower.includes('consult'));
+
+    if (synonymMatches) return true;
+    return srvTokens.some(
+      (st) =>
+        msgTokens.some((mt) => mt === st || (mt.length >= 5 && st.includes(mt))) ||
+        notesLower.includes(msgTokens[0] || '___'),
+    );
+  });
+
+  const asksPricesGeneral =
+    /\b(price|prices|cost|fee|fees|tariff|tariffs|charges|rate|rates|menu|how\s+much)\b/i.test(
+      lower,
+    ) || /kitna|kharch|paisa|entha|ధర|ఖర్చు|कितना|खर्च/i.test(message);
+
+  const asksTimings =
+    /\b(timing|timings|hours|open|close|closing|opening|sunday|saturday|weekday|weekends?|lunch|schedule)\b/i.test(
+      lower,
+    ) || /samay|kab|khulta|eppudu|samayam|సమయం|ఎప్పుడు|समय|कब/i.test(message);
+
+  const asksLocation =
+    /\b(where|location|address|directions?|landmark|banjara|road\s*no|parking|valet|wheelchair|reach|map)\b/i.test(
+      lower,
+    ) || /kahan|ekkada|ఎక్కడ|कहाँ/i.test(message);
+
+  const asksInsurance =
+    /\b(insurance|cashless|reimbursement|claim|tpa|star\s+health|hdfc|icici|bajaj|opd\s+cover)\b/i.test(
+      lower,
+    ) || /బీమా|बीमा/i.test(message);
+
+  const asksPolicies =
+    /\b(polic|cancel|reschedul|walk[\s-]?in|payment|pay|upi|gpay|phonepe|card|cash|emi|sterilis|steriliz|autoclave|senior\s+citizen|discount)\b/i.test(
+      lower,
+    ) || /నియమాలు|नियम|पेमेंट/i.test(message);
+
+  const asksContact =
+    /\b(phone|number|call|contact|email|helpline)\b/i.test(lower) ||
+    /ఫోన్|నంబర్|फोन|नंबर/i.test(message);
+
+  const sections: string[] = [];
+
+  if (matchedServices.length > 0) {
+    const list = matchedServices
+      .map((s) => `• ${s.name}: ${s.price}${s.notes ? ` — ${s.notes}` : ''}`)
+      .join('\n');
+    sections.push(
+      lang === 'hi'
+        ? `उपचार और शुल्क (Clinic File):\n${list}`
+        : lang === 'te'
+          ? `చికిత్స మరియు ధరలు (Clinic File):\n${list}`
+          : `Treatment & Fee Details:\n${list}`,
+    );
+  } else if (asksPricesGeneral) {
+    const unlistedServiceHint =
+      /\b(botox|liposuction|hair\s+transplant|lasik|mri|ct\s+scan|stem\s+cell|home\s+visit|pediatric\s+surgery|general\s+anesthesia|sedation)\b/i.test(
+        lower,
+      );
+    if (unlistedServiceHint) {
+      return { matched: false, reply: formatUnanswered(clinicData, lang) };
+    }
+    const list = clinicData.services.map((s) => `• ${s.name}: ${s.price}`).join('\n');
+    sections.push(
+      lang === 'hi'
+        ? `हमारे क्लिनिक के मानक शुल्क:\n${list}`
+        : lang === 'te'
+          ? `మా క్లినిక్ ప్రామాణిక ధరలు:\n${list}`
+          : `Clinic Treatment Tariffs:\n${list}`,
+    );
+  }
+
+  if (matchedDoctors.length > 0) {
+    const list = matchedDoctors
+      .map((d) => `• ${d.name} (${d.qualification}) — ${d.specialty}. Timings: ${d.schedule}`)
+      .join('\n');
+    sections.push(
+      lang === 'hi'
+        ? `डॉक्टर विवरण:\n${list}`
+        : lang === 'te'
+          ? `డాక్టర్ వివరాలు:\n${list}`
+          : `Doctor Details:\n${list}`,
+    );
+  } else if (asksDoctorsGeneral) {
+    const namedUnknownDoctor = /\bdr\.?\s+[a-z]{3,}/i.test(lower);
+    if (namedUnknownDoctor) {
+      return { matched: false, reply: formatUnanswered(clinicData, lang) };
+    }
+    const list = clinicData.doctors
+      .map((d) => `• ${d.name} (${d.qualification}) — ${d.specialty} | ${d.schedule}`)
+      .join('\n');
+    sections.push(
+      lang === 'hi'
+        ? `हमारे डॉक्टर:\n${list}`
+        : lang === 'te'
+          ? `మా వైద్యులు:\n${list}`
+          : `Our Dental Specialists:\n${list}`,
+    );
+  }
+
+  if (asksTimings && matchedDoctors.length === 0) {
+    const t = clinicData.timings;
+    sections.push(
+      lang === 'hi'
+        ? `क्लिनिक का समय:\n• ${t.weekdays}\n• ${t.sunday}\n• ${t.lunchBreak}`
+        : lang === 'te'
+          ? `క్లినిక్ వేళలు:\n• ${t.weekdays}\n• ${t.sunday}\n• ${t.lunchBreak}`
+          : `Clinic Timings:\n• ${t.weekdays}\n• ${t.sunday}\n• ${t.lunchBreak}`,
+    );
+  }
+
+  if (asksLocation) {
+    sections.push(
+      lang === 'hi'
+        ? `पता और पार्किंग:\n• ${clinicData.address}\n• लैंडमार्क: ${clinicData.landmark}\n• ${clinicData.parkingAndAccess}`
+        : lang === 'te'
+          ? `చిరునామా మరియు పార్కింగ్:\n• ${clinicData.address}\n• ల్యాండ్‌మార్క్: ${clinicData.landmark}\n• ${clinicData.parkingAndAccess}`
+          : `Location & Access:\n• ${clinicData.address}\n• Landmark: ${clinicData.landmark}\n• ${clinicData.parkingAndAccess}`,
+    );
+  }
+
+  if (asksInsurance) {
+    const partners = clinicData.insurance.partners.map((p) => `• ${p}`).join('\n');
+    sections.push(
+      lang === 'hi'
+        ? `बीमा (Insurance) जानकारी:\n${clinicData.insurance.summary}\nसूचीबद्ध पार्टनर:\n${partners}`
+        : lang === 'te'
+          ? `ఇన్సూరెన్స్ వివరాలు:\n${clinicData.insurance.summary}\nజాబితా చేయబడిన భాగస్వాములు:\n${partners}`
+          : `Insurance & Reimbursement:\n${clinicData.insurance.summary}\nSupported Corporate OPD Plans:\n${partners}`,
+    );
+  }
+
+  if (asksPolicies) {
+    const pol = clinicData.policies.map((p) => `• ${p}`).join('\n');
+    sections.push(
+      lang === 'hi'
+        ? `क्लिनिक नीतियां (Policies):\n${pol}`
+        : lang === 'te'
+          ? `క్లినిక్ నియమాలు (Policies):\n${pol}`
+          : `Clinic Policies:\n${pol}`,
+    );
+  }
+
+  if (asksContact) {
+    sections.push(
+      `Contact Details:\n• Front Desk: ${clinicData.phone}\n• Emergency Dental Line: ${clinicData.emergencyPhone}\n• Email: ${clinicData.email}`,
+    );
+  }
+
+  if (sections.length === 0) {
+    return { matched: false, reply: formatUnanswered(clinicData, lang) };
+  }
+  return { matched: true, reply: sections.join('\n\n') };
+}
+
+export function localHandleChat(sessionId: string, message: string): {
+  sessionId: string;
+  reply: string;
+  fallbackUsed: boolean;
+  sourceLabel?: string;
+  language: LanguageCode;
+  ticket: Ticket | null;
+  messages: ChatMessage[];
+} {
+  const clinicData = localGetClinicData();
+  const trimmed = message.trim();
+  const lang = detectLanguage(trimmed);
+
+  localAppendSessionMessage({
+    id: `msg-${Date.now()}-p`,
+    sessionId,
+    sender: 'patient',
+    text: trimmed,
+    timestamp: new Date().toISOString(),
+  });
+
+  let reply = '';
+  let ticket: Ticket | null = null;
+
+  if (isRuleOverrideOrDiscountDemand(trimmed)) {
+    reply =
+      lang === 'hi'
+        ? `मैं क्लिनिक के नियमों को बदल नहीं सकता और न ही किसी प्रकार की छूट (discount) का वादा कर सकता हूँ। ${clinicData.clinicName} में सभी उपचारों के लिए मानक क्लिनिक शुल्क लागू होते हैं।`
+        : lang === 'te'
+          ? `నేను క్లినిక్ నియమాలను మార్చలేను మరియు డిస్కౌంట్ హామీ ఇవ్వలేను. ${clinicData.clinicName} వద్ద అన్ని చికిత్సలకు ప్రామాణిక క్లినిక్ ధరలు వర్తిస్తాయి.`
+          : `I cannot override clinic guidelines or offer or promise any discounts. Standard clinic tariffs apply to all treatments at ${clinicData.clinicName}. (Senior citizens aged 65+ receive a complimentary Digital X-Ray with a paid consultation.)`;
+  } else if (isEmergencyMessage(trimmed)) {
+    ticket = localCreateTicket({
+      sessionId,
+      question: trimmed,
+      status: 'urgent',
+      category: 'emergency',
+    });
+    reply =
+      lang === 'hi'
+        ? `आपातकालीन नंबर (Emergency): ${clinicData.emergencyPhone}\n\nकृपया तुरंत हमारे 24/7 आपातकालीन डेंटल नंबर ${clinicData.emergencyPhone} पर कॉल करें या ${clinicData.address} स्थित क्लिनिक पहुँचें। मैंने प्राथमिकता (urgent) टिकट बना दिया है।`
+        : lang === 'te'
+          ? `అత్యవసర నంబర్ (Emergency): ${clinicData.emergencyPhone}\n\nదయచేసి వెంటనే మా 24/7 ఎమర్జెన్సీ డెంటల్ నంబర్ ${clinicData.emergencyPhone} కు కాల్ చేయండి లేదా ${clinicData.address} లోని క్లినిక్‌కు రండి. urgent టికెట్ ఓపెన్ చేయబడింది.`
+          : `Emergency Dental Line: ${clinicData.emergencyPhone}\n\nThis sounds like a dental emergency. Please call our 24/7 emergency line at ${clinicData.emergencyPhone} immediately or visit ${clinicData.clinicName} at ${clinicData.address}. I have opened an urgent ticket so our on-call team is alerted right away.`;
+  } else {
+    const booking = extractBookingRequest(trimmed, clinicData);
+    if (isMedicalAdviceOrSymptom(trimmed)) {
+      if (booking.isBooking) {
+        ticket = localCreateTicket({
+          sessionId,
+          question: trimmed,
+          status: 'needs human',
+          category: 'booking',
+          bookingTime: booking.bookingTime,
+        });
+      }
+      const consult = clinicData.services.find((s) =>
+        s.name.toLowerCase().includes('consult'),
+      );
+      const consultFee = consult ? consult.price : '₹500';
+      reply =
+        lang === 'hi'
+          ? `मैं चिकित्सीय सलाह, निदान या दवा की सिफारिश नहीं दे सकता। किसी भी दर्द या लक्षण के लिए हमारे दंत चिकित्सक द्वारा व्यक्तिगत जांच आवश्यक है (कंसल्टेशन शुल्क: ${consultFee})। ${booking.bookingTime ? `मैंने "${booking.bookingTime}" के लिए आपका अपॉइंटमेंट अनुरोध दर्ज कर लिया है।` : 'कृपया अपॉइंटमेंट बुक करने के लिए अपना पसंदीदा दिन और समय बताएं।'}`
+          : lang === 'te'
+            ? `నేను వైద్య సలహా, రోగ నిర్ధారణ లేదా మందుల సూచనలు ఇవ్వలేను. నొప్పి లేదా లక్షణాల కోసం దంతవైద్యుడు స్వయంగా పరీక్షించాల్సి ఉంటుంది (కన్సల్టేషన్ ఫీజు: ${consultFee}). ${booking.bookingTime ? `"${booking.bookingTime}" కోసం మీ అపాయింట్‌మెంట్ అభ్యర్థనను నమోదు చేశాము.` : 'దయచేసి అపాయింట్‌మెంట్ కోసం మీకు అనుకూలమైన రోజు మరియు సమయాన్ని తెలియజేయండి.'}`
+            : `I cannot provide medical advice, a diagnosis, or recommend medications. Because you are experiencing symptoms or pain, a dentist must examine you in person. ${booking.bookingTime ? `I have also logged your appointment request for ${booking.bookingTime}, and our front desk will confirm your slot shortly.` : `Would you like me to book an appointment? Please share your preferred day and time (Consultation fee: ${consultFee}; Hours: ${clinicData.timings.weekdays}).`}`;
+    } else if (booking.isBooking) {
+      ticket = localCreateTicket({
+        sessionId,
+        question: trimmed,
+        status: 'needs human',
+        category: 'booking',
+        bookingTime: booking.bookingTime,
+      });
+      reply =
+        lang === 'hi'
+          ? `धन्यवाद! मैंने ${clinicData.clinicName} में अपॉइंटमेंट अनुरोध दर्ज कर लिया है (पसंदीदा समय: ${booking.bookingTime})। हमारे फ्रंट डेस्क से कोई व्यक्ति 2 कार्य घंटों के भीतर पुष्टि के लिए कॉल करेगा।`
+          : lang === 'te'
+            ? `ధన్యవాదాలు! ${clinicData.clinicName} లో మీ అపాయింట్‌మెంట్ అభ్యర్థన నమోదు చేయబడింది (సమయం: ${booking.bookingTime}). మా ఫ్రంట్ డెస్క్ సిబ్బంది 2 పని గంటలలోపు నిర్ధారించడానికి కాల్ చేస్తారు.`
+            : `I have logged your appointment booking request for ${booking.bookingTime} at ${clinicData.clinicName}. Our front desk team will confirm your slot and someone will call back within 2 working hours (Front desk: ${clinicData.phone}).`;
+    } else {
+      const matched = answerFromClinicFile(trimmed, clinicData, lang);
+      reply = matched.reply;
+      if (!matched.matched) {
+        ticket = localCreateTicket({
+          sessionId,
+          question: trimmed,
+          status: 'needs human',
+          category: 'unanswered',
+        });
+      }
+    }
+  }
+
+  const messages = localAppendSessionMessage({
+    id: `msg-${Date.now()}-b`,
+    sessionId,
+    sender: 'bot',
+    text: reply,
+    timestamp: new Date().toISOString(),
+    fallbackUsed: true,
+    sourceLabel: 'Answered from the clinic file',
+    language: lang,
+    ticketId: ticket?.id,
+  });
+
+  return {
+    sessionId,
+    reply,
+    fallbackUsed: true,
+    sourceLabel: 'Answered from the clinic file',
+    language: lang,
+    ticket,
+    messages,
+  };
+}

@@ -12,6 +12,13 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
+import {
+  apiGetTickets,
+  apiReplyToTicket,
+  apiResetClinicData,
+  apiUpdateClinicData,
+  apiUpdateTicketStatus,
+} from '../lib/clinicApi.ts';
 import { normalizeClinicData, type ClinicData, type Ticket, type TicketStatus } from '../types.ts';
 
 interface StaffPortalPageProps {
@@ -93,12 +100,8 @@ export function StaffPortalPage({
 
   const fetchTickets = useCallback(async () => {
     try {
-      const res = await fetch('/api/tickets');
-      if (!res.ok) return;
-      const data = (await res.json()) as { tickets?: Ticket[] };
-      if (Array.isArray(data.tickets)) {
-        setTickets(data.tickets);
-      }
+      const list = await apiGetTickets();
+      setTickets(list);
     } catch {
       // Retry on next poll
     } finally {
@@ -109,7 +112,16 @@ export function StaffPortalPage({
   useEffect(() => {
     void fetchTickets();
     const timer = window.setInterval(() => void fetchTickets(), 3000);
-    return () => window.clearInterval(timer);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'dentistae_tickets_v1') {
+        void fetchTickets();
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('storage', onStorage);
+    };
   }, [fetchTickets]);
 
   const counts = useMemo(() => {
@@ -143,12 +155,8 @@ export function StaffPortalPage({
     setSubmittingId(ticketId);
     setTicketFeedback(null);
     try {
-      const res = await fetch(`/api/tickets/${encodeURIComponent(ticketId)}/reply`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reply: text, status: 'answered' }),
-      });
-      if (!res.ok) {
+      const ok = await apiReplyToTicket(ticketId, text, 'answered');
+      if (!ok) {
         throw new Error('Failed to send reply.');
       }
       setReplyDrafts((prev) => ({ ...prev, [ticketId]: '' }));
@@ -165,12 +173,8 @@ export function StaffPortalPage({
 
   const handleStatusChange = async (ticketId: string, status: TicketStatus) => {
     try {
-      const res = await fetch(`/api/tickets/${encodeURIComponent(ticketId)}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
-      if (res.ok) {
+      const ok = await apiUpdateTicketStatus(ticketId, status);
+      if (ok) {
         await fetchTickets();
       }
     } catch {
@@ -188,16 +192,7 @@ export function StaffPortalPage({
         : draftClinic;
       const payload = normalizeClinicData(parsed);
 
-      const res = await fetch('/api/clinic-data', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const errBody = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(errBody.error || 'Could not save clinic file.');
-      }
-      const updated = normalizeClinicData((await res.json()) as Partial<ClinicData>);
+      const updated = await apiUpdateClinicData(payload);
       onClinicDataUpdated(updated);
       setSaveStatus('Clinic file saved. Bot and fallback replies now use the updated data.');
     } catch (err) {
@@ -213,12 +208,9 @@ export function StaffPortalPage({
     setSaveStatus(null);
     setSaveError(null);
     try {
-      const res = await fetch('/api/clinic-data/reset', { method: 'POST' });
-      if (res.ok) {
-        const fresh = normalizeClinicData((await res.json()) as Partial<ClinicData>);
-        onClinicDataUpdated(fresh);
-        setSaveStatus('Clinic file restored to default Banjara Hills records.');
-      }
+      const fresh = await apiResetClinicData();
+      onClinicDataUpdated(fresh);
+      setSaveStatus('Clinic file restored to default Banjara Hills records.');
     } catch {
       setSaveError('Failed to reset clinic file.');
     }

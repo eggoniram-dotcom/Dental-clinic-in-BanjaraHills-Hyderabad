@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   Stethoscope,
 } from 'lucide-react';
+import { apiGetSessionMessages, apiSendChatMessage } from '../lib/clinicApi.ts';
 import type { ChatMessage, ClinicData } from '../types.ts';
 
 interface PatientChatPageProps {
@@ -79,19 +80,16 @@ export function PatientChatPage({ clinicData }: PatientChatPageProps) {
     let active = true;
     const fetchSession = async () => {
       try {
-        const res = await fetch(`/api/session/${encodeURIComponent(sessionId)}`);
-        if (!res.ok) return;
-        const data = (await res.json()) as { messages?: ChatMessage[] };
-        if (active && Array.isArray(data.messages)) {
+        const loaded = await apiGetSessionMessages(sessionId);
+        if (active && Array.isArray(loaded)) {
           setMessages((prev) => {
-            if (prev.length === data.messages!.length) {
+            if (prev.length === loaded.length) {
               return prev;
             }
-            // Do not overwrite optimistic patient message while an in-flight POST is running
-            if (isSending && data.messages!.length < prev.length) {
+            if (isSending && loaded.length < prev.length) {
               return prev;
             }
-            return data.messages!;
+            return loaded;
           });
         }
       } catch {
@@ -100,12 +98,19 @@ export function PatientChatPage({ clinicData }: PatientChatPageProps) {
     };
 
     if (!initialQuery || autoAskedRef.current) {
-      fetchSession();
+      void fetchSession();
     }
-    const timer = window.setInterval(fetchSession, 2000);
+    const timer = window.setInterval(() => void fetchSession(), 2000);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'dentistae_sessions_v1') {
+        void fetchSession();
+      }
+    };
+    window.addEventListener('storage', onStorage);
     return () => {
       active = false;
       window.clearInterval(timer);
+      window.removeEventListener('storage', onStorage);
     };
   }, [sessionId, isSending, initialQuery]);
 
@@ -128,21 +133,10 @@ export function PatientChatPage({ clinicData }: PatientChatPageProps) {
       setMessages((prev) => [...prev, optimisticUserMsg]);
 
       try {
-        const res = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId,
-            message: trimmed,
-          }),
+        const data = await apiSendChatMessage({
+          sessionId,
+          message: trimmed,
         });
-        if (!res.ok) {
-          throw new Error('Could not reach the clinic front desk.');
-        }
-        const data = (await res.json()) as {
-          sessionId: string;
-          messages: ChatMessage[];
-        };
         if (Array.isArray(data.messages)) {
           setMessages(data.messages);
         }
