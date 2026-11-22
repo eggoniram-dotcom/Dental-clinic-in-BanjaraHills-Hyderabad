@@ -19,7 +19,7 @@ import {
 import { apiGetSessionMessages, apiSendChatMessage } from '../lib/clinicApi.ts';
 import {
   CLINIC_IMAGES,
-  TREATMENT_PAGES,
+  FEATURED_TREATMENT_PAGES,
   buildGoogleMapsDirectionsLink,
   buildWhatsAppLink,
   getDoctorEnrichment,
@@ -481,35 +481,34 @@ export function PatientChatPage({
       </section>
 
       {/* ============================================================
-          SECTION 2: OUR DENTAL TREATMENTS (6 Individual Treatment Pages)
+          SECTION 2: SERVICES — 6 Dedicated Treatment Pages + Why Choose Us
          ============================================================ */}
       <section
         id="treatments"
         aria-label="Our dental treatments"
         className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 scroll-mt-16"
       >
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div className="max-w-2xl">
-            <p className="text-xs sm:text-sm font-medium text-emerald-800">
-              Individual Treatment Guides · Transparent Clinic Tariffs
-            </p>
-            <h2
-              className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-emerald-950"
-              style={{ textWrap: 'balance' }}
-            >
-              Our Dental Treatments in Banjara Hills
-            </h2>
-          </div>
-          <p className="text-xs sm:text-sm text-slate-600 max-w-md">
-            Explore visit steps, FAQs, and live clinic fees for each treatment, or message our
-            front desk directly on WhatsApp.
+        <div className="max-w-2xl">
+          <p className="text-xs sm:text-sm font-medium text-emerald-800">
+            Creating Healthy, Confident Smiles with Precision &amp; Care
+          </p>
+          <h2
+            className="mt-1.5 text-2xl sm:text-3xl font-bold tracking-tight text-emerald-950"
+            style={{ textWrap: 'balance' }}
+          >
+            Dental Services &amp; Individual Treatment Guides
+          </h2>
+          <p className="mt-2 text-sm sm:text-base text-slate-600 leading-relaxed">
+            Select any treatment to review the clinical process, expected visits, FAQs, and live
+            indicative fees from our Banjara Hills clinic file.
           </p>
         </div>
 
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {TREATMENT_PAGES.map((item, index) => {
+        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {FEATURED_TREATMENT_PAGES.map((item) => {
             const matchedService = resolveTreatmentService(item, clinicData);
             const livePrice = matchedService?.price;
+            const imgKey = `treat-${item.slug}`;
             const waTreatmentHref = buildWhatsAppLink(
               clinicData,
               `Hello ${clinicData.clinicName}, I would like to enquire about ${item.title}.`,
@@ -518,41 +517,62 @@ export function PatientChatPage({
             return (
               <article
                 key={item.slug}
-                className="flex flex-col justify-between rounded-2xl bg-white border border-emerald-950/10 p-5 sm:p-6 hover:border-emerald-900/25 transition-colors"
+                className="flex flex-col justify-between rounded-2xl bg-white border border-emerald-950/10 overflow-hidden hover:border-emerald-900/25 transition-colors"
               >
                 <div>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-xs font-mono text-slate-500 tabular-nums">
-                      {String(index + 1).padStart(2, '0')}.
-                    </span>
-                    {livePrice && (
-                      <span className="text-sm font-bold text-emerald-900 tabular-nums">
-                        {livePrice}
-                      </span>
+                  <div className="aspect-[16/10] bg-emerald-950/5 overflow-hidden">
+                    {!brokenImages[imgKey] ? (
+                      <img
+                        src={item.image}
+                        alt={`${item.title} at ${clinicData.clinicName} Banjara Hills`}
+                        referrerPolicy="no-referrer"
+                        onError={() => markImageBroken(imgKey)}
+                        className={`w-full h-full object-cover ${item.imagePosition || 'object-center'}`}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-emerald-50 to-stone-100 text-emerald-900 p-4">
+                        <Stethoscope className="w-8 h-8 opacity-75" aria-hidden="true" />
+                      </div>
                     )}
                   </div>
 
-                  <h3 className="mt-2 text-lg font-bold text-emerald-950 tracking-tight">
-                    {item.title}
-                  </h3>
-                  <p className="mt-2 text-sm text-slate-600 leading-relaxed">{item.summary}</p>
+                  <div className="p-5">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <h3 className="text-lg font-bold text-emerald-950 tracking-tight">
+                        {item.title}
+                      </h3>
+                      {livePrice && (
+                        <span className="text-sm font-bold text-emerald-900 tabular-nums shrink-0">
+                          {livePrice}
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="mt-1 text-xs font-medium text-slate-500">
+                      {item.expectedVisits} · {item.sessionDuration}
+                    </p>
+
+                    <p className="mt-2.5 text-sm text-slate-600 leading-relaxed">
+                      {item.summary}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
+                <div className="px-5 pb-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                   <button
                     type="button"
                     onClick={() => onSelectTreatment?.(item.slug)}
-                    className="inline-flex items-center gap-1.5 min-h-[40px] text-xs sm:text-sm font-semibold text-emerald-900 hover:text-emerald-700 transition-colors whitespace-nowrap cursor-pointer"
+                    className="inline-flex items-center justify-center gap-1.5 min-h-[40px] px-4 py-2 rounded-xl border border-emerald-900/25 bg-white text-xs sm:text-sm font-semibold text-emerald-950 hover:bg-emerald-900 hover:text-white transition-colors whitespace-nowrap cursor-pointer"
                   >
-                    <span>Treatment Details</span>
-                    <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                    <span>Learn more</span>
+                    <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
                   </button>
 
                   <a
                     href={waTreatmentHref}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 min-h-[40px] px-3 py-1.5 rounded-lg border border-emerald-950/15 bg-emerald-50/60 text-xs font-semibold text-emerald-950 hover:bg-emerald-100 transition-colors whitespace-nowrap"
+                    className="inline-flex items-center gap-1.5 min-h-[40px] px-3 py-2 rounded-xl text-xs font-semibold text-emerald-800 hover:bg-emerald-50 transition-colors whitespace-nowrap"
                   >
                     <MessageCircle className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" />
                     <span>WhatsApp</span>
@@ -561,6 +581,41 @@ export function PatientChatPage({
               </article>
             );
           })}
+        </div>
+
+        {/* Why Choose Us Strip (grounded, clean surface blocks) */}
+        <div className="mt-12 pt-8 border-t border-emerald-950/10">
+          <h3 className="text-lg sm:text-xl font-bold text-emerald-950 tracking-tight">
+            Why Choose {clinicData.clinicName}
+          </h3>
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {[
+              {
+                title: 'Experienced Specialists',
+                desc: 'Dedicated MDS Endodontics, Oral Surgery, Orthodontics & general care.',
+              },
+              {
+                title: 'Comfort-First Care',
+                desc: 'Gentle local anaesthesia, unhurried consultations & clear explanations.',
+              },
+              {
+                title: 'Modern Equipment',
+                desc: 'Digital RVG X-rays, 3D intraoral scanning & Class-B autoclave sterilisation.',
+              },
+              {
+                title: 'Calm Ground-Floor Clinic',
+                desc: 'Step-free Road No. 12 access with complimentary valet parking.',
+              },
+            ].map((item) => (
+              <div
+                key={item.title}
+                className="rounded-xl bg-white border border-emerald-950/10 p-4"
+              >
+                <p className="text-sm font-bold text-emerald-950">{item.title}</p>
+                <p className="mt-1 text-xs text-slate-600 leading-relaxed">{item.desc}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 

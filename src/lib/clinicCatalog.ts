@@ -37,7 +37,7 @@ export const DOCTOR_PROFILE_MAP: Record<string, DoctorProfileEnrichment> = {
     experienceLabel: 'Preventive & Aesthetic General Care',
     philosophy:
       'Build long-term oral health through gentle ultrasonic cleanings, shade-matched tooth-coloured restorations, and transparent preventive check-ups for the whole family.',
-    focusAreas: ['Scaling & Polishing', 'Composite Fillings', 'In-Office Teeth Whitening'],
+    focusAreas: ['Dental Cleaning & Polishing', 'Composite Fillings', 'In-Office Teeth Whitening'],
   },
   'doc-karthik': {
     portrait: CLINIC_IMAGES.docKarthik,
@@ -75,64 +75,19 @@ export interface TreatmentPageSpec {
   defaultServiceName: string;
   leadDoctorId: string;
   image: string;
+  imagePosition?: string;
+  featuredOnHome: boolean;
+  expectedVisits: string;
+  sessionDuration: string;
+  recoveryNote: string;
   summary: string;
+  detailedExplanation: string;
   whenToConsult: string[];
   visitSteps: { step: string; title: string; detail: string }[];
   faqs: { q: string; a: string }[];
 }
 
 export const TREATMENT_PAGES: TreatmentPageSpec[] = [
-  {
-    slug: 'root-canal',
-    title: 'Root Canal Treatment (RCT)',
-    shortTitle: 'Root Canal',
-    seoKeyword: 'Root canal treatment Hyderabad',
-    serviceMatchKeywords: ['root canal', 'rct'],
-    defaultServiceName: 'Root Canal Treatment (RCT)',
-    leadDoctorId: 'doc-ananya',
-    image: CLINIC_IMAGES.heroSuite,
-    summary:
-      'Magnification-assisted endodontic treatment in Banjara Hills designed to clear deep tooth decay or pulp infection while saving your natural tooth.',
-    whenToConsult: [
-      'Lingering sensitivity to hot or cold food and beverages',
-      'Discomfort while biting or chewing on one side',
-      'Deep decay or a chipped tooth confirmed on a digital RVG X-ray',
-    ],
-    visitSteps: [
-      {
-        step: '01',
-        title: 'Digital RVG X-Ray & Evaluation',
-        detail:
-          'Your endodontist examines the tooth and takes a low-radiation digital X-ray to assess root anatomy before confirming the exact treatment plan and published tariff.',
-      },
-      {
-        step: '02',
-        title: 'Comfort-First Cleaning & Shaping',
-        detail:
-          'Under local anaesthesia, infected tissue is gently cleaned and disinfected using rotary endodontic instruments under strict Class-B sterilisation.',
-      },
-      {
-        step: '03',
-        title: 'Biocompatible Seal & Crown Guidance',
-        detail:
-          'The canals are sealed to prevent re-infection. When structural reinforcement is advised, a custom Zirconia or Ceramic crown is planned separately.',
-      },
-    ],
-    faqs: [
-      {
-        q: 'Is root canal treatment painful?',
-        a: 'Root canal procedures are performed under local anaesthesia so the tooth stays numb during treatment. A dentist must examine your tooth first to plan the right approach.',
-      },
-      {
-        q: 'How many visits does a root canal take?',
-        a: 'Depending on canal anatomy and whether there is active infection, treatment is completed in one or two scheduled appointments after clinical assessment.',
-      },
-      {
-        q: 'Is the dental crown included in the RCT fee?',
-        a: 'In our published clinic file, the Root Canal Treatment fee covers the endodontic procedure; Zirconia or Ceramic crowns are billed separately if recommended.',
-      },
-    ],
-  },
   {
     slug: 'dental-implants',
     title: 'Dental Implants',
@@ -142,37 +97,49 @@ export const TREATMENT_PAGES: TreatmentPageSpec[] = [
     defaultServiceName: 'Titanium Dental Implant (Fixture)',
     leadDoctorId: 'doc-vikram',
     image: CLINIC_IMAGES.diagnosticsBay,
+    featuredOnHome: true,
+    expectedVisits: '2 clinical phases (3–4 visits total)',
+    sessionDuration: '45–60 mins for fixture placement',
+    recoveryNote: 'Osseointegration healing typically spans 8–12 weeks before final crown fitting.',
     summary:
       'Biocompatible titanium dental implants placed by our Oral & Maxillofacial Surgeon in Banjara Hills to restore missing teeth with natural stability.',
+    detailedExplanation:
+      'A dental implant replaces the natural root of a missing tooth using a medical-grade titanium fixture placed comfortably into the jawbone. Once the bone integrates around the fixture, a custom shade-matched Zirconia or ceramic crown is fitted on top—restoring chewing efficiency without grinding down neighbouring healthy teeth.',
     whenToConsult: [
       'Single or multiple missing teeth affecting chewing balance',
-      'Desire for a fixed alternative to removable partial dentures',
-      'Long-term jawbone preservation after a tooth extraction',
+      'Desire for a fixed, long-term alternative to removable partial dentures',
+      'Preserving jawbone volume and facial contour after a tooth extraction',
     ],
     visitSteps: [
       {
         step: '01',
-        title: 'Surgical Consultation & Bone Assessment',
+        title: 'Surgical Consultation & Diagnostic Imaging',
         detail:
-          'Our oral surgeon reviews your medical history, oral health, and diagnostic imaging to confirm suitability and provide a written fee schedule.',
+          'Our oral surgeon reviews your medical history, gum health, and diagnostic scans to verify bone density and share an itemised treatment plan with published fees.',
       },
       {
         step: '02',
         title: 'Precision Titanium Fixture Placement',
         detail:
-          'The medical-grade titanium implant fixture is placed comfortably under local anaesthesia following hospital-grade aseptic protocols.',
+          'Under local anaesthesia and hospital-grade Class-B sterilisation, the titanium implant fixture is placed gently into the planned site.',
       },
       {
         step: '03',
-        title: 'Healing & Custom Prosthetic Crown',
+        title: 'Healing & Osseointegration Review',
         detail:
-          'Once osseointegration stabilises the fixture, a custom shade-matched Zirconia or Ceramic crown is fitted for natural appearance and function.',
+          'A short follow-up checks soft-tissue comfort while the implant integrates naturally with the surrounding jawbone.',
+      },
+      {
+        step: '04',
+        title: 'Digital Scan & Custom Prosthetic Crown',
+        detail:
+          'Once stable, a digital intraoral scan is taken to fabricate and fit your custom ceramic or Zirconia crown (billed separately from the fixture).',
       },
     ],
     faqs: [
       {
         q: 'What does the published Titanium Dental Implant price include?',
-        a: 'Our clinic tariff covers the Titanium Dental Implant fixture. The final prosthetic crown is priced separately once healing is confirmed.',
+        a: 'Our clinic tariff covers the Titanium Dental Implant fixture. The final prosthetic Zirconia or Ceramic crown is priced separately once healing is confirmed.',
       },
       {
         q: 'Who performs implant surgery at Dentistae?',
@@ -185,39 +152,114 @@ export const TREATMENT_PAGES: TreatmentPageSpec[] = [
     ],
   },
   {
+    slug: 'root-canal',
+    title: 'Root Canal Treatment',
+    shortTitle: 'Root Canal Treatment',
+    seoKeyword: 'Root canal treatment Hyderabad',
+    serviceMatchKeywords: ['root canal', 'rct'],
+    defaultServiceName: 'Root Canal Treatment (RCT)',
+    leadDoctorId: 'doc-ananya',
+    image: CLINIC_IMAGES.heroSuite,
+    featuredOnHome: true,
+    expectedVisits: '1–2 visits (case-dependent)',
+    sessionDuration: '45–60 mins per sitting',
+    recoveryNote: 'Most patients resume normal work the same day; avoid hard biting on the tooth until the final restoration is placed.',
+    summary:
+      'Magnification-assisted endodontic care in Banjara Hills designed to clear deep decay or pulp infection while saving your natural tooth.',
+    detailedExplanation:
+      'When deep decay, a crack, or trauma reaches the inner pulp nerve of a tooth, root canal treatment gently removes the infected tissue, disinfects the root canals, and seals the tooth from within. Saving your natural tooth prevents shifting of adjacent teeth and avoids the need for extraction.',
+    whenToConsult: [
+      'Lingering sensitivity to hot or cold food and beverages',
+      'Discomfort while biting or chewing on one side',
+      'Deep decay or a fractured tooth confirmed on a digital RVG X-ray',
+    ],
+    visitSteps: [
+      {
+        step: '01',
+        title: 'Digital RVG X-Ray & Endodontic Assessment',
+        detail:
+          'Your endodontist examines the tooth and takes a low-radiation digital X-ray to evaluate root canal anatomy and confirm the exact published fee before starting.',
+      },
+      {
+        step: '02',
+        title: 'Local Anaesthesia & Rotary Canal Cleaning',
+        detail:
+          'Once thoroughly numb, infected pulp tissue is gently cleared and irrigated using precision rotary instruments under Class-B sterilisation.',
+      },
+      {
+        step: '03',
+        title: 'Biocompatible Canal Sealing',
+        detail:
+          'Cleaned canals are sealed hermetically with biocompatible filling material to prevent re-infection.',
+      },
+      {
+        step: '04',
+        title: 'Protective Restoration or Crown Review',
+        detail:
+          'A tooth-coloured core build-up is placed, and if structural reinforcement is advised (especially on molars), a Zirconia or ceramic crown is planned separately.',
+      },
+    ],
+    faqs: [
+      {
+        q: 'Is root canal treatment painful?',
+        a: 'Root canal procedures are performed under local anaesthesia so the tooth stays numb during treatment. A dentist must examine your tooth first to confirm the right clinical plan.',
+      },
+      {
+        q: 'How many visits does a root canal take?',
+        a: 'Depending on canal anatomy and whether active infection is present, treatment is completed in 1 or 2 scheduled sittings after clinical assessment.',
+      },
+      {
+        q: 'Is the dental crown included in the RCT fee?',
+        a: 'In our published clinic file, the Root Canal Treatment fee covers the endodontic procedure (Anterior ₹4,500; Molar/re-treatment up to ₹6,500); crowns are billed separately if recommended.',
+      },
+    ],
+  },
+  {
     slug: 'teeth-whitening',
-    title: 'In-Office Teeth Whitening',
+    title: 'Teeth Whitening',
     shortTitle: 'Teeth Whitening',
     seoKeyword: 'Teeth whitening Hyderabad',
     serviceMatchKeywords: ['whitening', 'whiten'],
     defaultServiceName: 'In-Office Teeth Whitening',
     leadDoctorId: 'doc-meera',
     image: CLINIC_IMAGES.reception,
+    featuredOnHome: true,
+    expectedVisits: '1 clinic visit',
+    sessionDuration: '45 mins desensitising session',
+    recoveryNote: 'Follow a 48-hour low-stain diet (avoiding dark tea, coffee, or turmeric) to lock in shade brightness.',
     summary:
-      'Dentist-supervised 45-minute desensitising whitening in Banjara Hills tailored to lift surface stains safely without compromising enamel health.',
+      'Dentist-supervised 45-minute desensitising whitening in Banjara Hills tailored to lift stubborn stains safely without harming enamel.',
+    detailedExplanation:
+      'In-office professional teeth whitening uses clinically controlled brightening gels paired with a protective gum barrier and desensitising agents. Unlike abrasive over-the-counter strips or powders, dentist-monitored whitening brightens natural enamel evenly in a single controlled visit.',
     whenToConsult: [
-      'Tea, coffee, or dietary discolouration dulling your natural smile',
-      'Preparing for an upcoming wedding, milestone, or professional event',
-      'Wanting dentist-monitored shade brightening rather than abrasive home kits',
+      'Tea, coffee, or everyday dietary staining dulling your natural enamel',
+      'Preparing for a wedding, milestone celebration, or professional appearance',
+      'Seeking dentist-monitored brightening with gum protection and sensitivity care',
     ],
     visitSteps: [
       {
         step: '01',
-        title: 'Shade Check & Gum Assessment',
+        title: 'Enamel & Shade Evaluation',
         detail:
-          'Your dentist checks enamel condition, existing fillings, and gum health first—whitening is only performed on healthy teeth.',
+          'Your dentist checks enamel health, existing fillings, and gums first—ensuring whitening is only performed on healthy teeth.',
       },
       {
         step: '02',
-        title: 'Protective Barrier & Desensitising Session',
+        title: 'Protective Gingival Barrier',
         detail:
-          'A gentle gingival barrier protects your gums while our 45-minute clinical whitening gel works evenly across visible teeth.',
+          'Soft gum tissues and lips are carefully isolated so the clinical brightening gel contacts only your tooth surfaces.',
       },
       {
         step: '03',
-        title: 'Post-Care Shade Guidance',
+        title: '45-Minute Desensitising Whitening Cycles',
         detail:
-          'Receive clear 48-hour dietary guidance to maintain your refreshed shade and minimise temporary sensitivity.',
+          'Controlled whitening gel cycles gently break down deep extrinsic stains while minimising post-visit sensitivity.',
+      },
+      {
+        step: '04',
+        title: 'Shade Comparison & Aftercare Guidance',
+        detail:
+          'Review your brightened shade immediately and receive clear 48-hour dietary guidance to maintain long-lasting results.',
       },
     ],
     faqs: [
@@ -226,63 +268,204 @@ export const TREATMENT_PAGES: TreatmentPageSpec[] = [
         a: 'Our in-office desensitising whitening session takes approximately 45 minutes following a brief oral check.',
       },
       {
-        q: 'Should I get scaling and polishing before whitening?',
-        a: 'If tartar or heavy surface plaque is present, your dentist may recommend Ultrasonic Scaling & Polishing beforehand for even results.',
+        q: 'Should I schedule dental cleaning before whitening?',
+        a: 'If plaque or tartar deposits are present, your dentist may recommend Ultrasonic Scaling & Polishing beforehand so the whitening gel reaches enamel evenly.',
       },
       {
-        q: 'Will whitening lighten existing crowns or composite fillings?',
+        q: 'Will whitening change the colour of existing crowns or fillings?',
         a: 'Whitening agents brighten natural tooth enamel only; existing crowns and fillings retain their original shade, which your dentist reviews during consultation.',
       },
     ],
   },
   {
     slug: 'braces-aligners',
-    title: 'Braces & Clear Aligners',
+    title: 'Braces and Aligners',
     shortTitle: 'Braces & Aligners',
     seoKeyword: 'Braces and clear aligners Banjara Hills',
     serviceMatchKeywords: ['aligner', 'brace'],
     defaultServiceName: 'Clear Aligners',
     leadDoctorId: 'doc-karthik',
-    image: CLINIC_IMAGES.diagnosticsBay,
+    image: CLINIC_IMAGES.docKarthik,
+    imagePosition: 'object-top',
+    featuredOnHome: true,
+    expectedVisits: 'Initial scan + monthly / 6-week reviews',
+    sessionDuration: '30–45 mins per review visit',
+    recoveryNote: 'Typical orthodontic journeys span 8–18 months depending on crowding or bite complexity, followed by retainers.',
     summary:
       'Orthodontic care led by our MDS Orthodontist in Banjara Hills, offering both full-arch metal braces and 3D-scanned clear aligners.',
+    detailedExplanation:
+      'Orthodontic treatment gently aligns crowded, spaced, or rotated teeth and balances your bite for easier cleaning and long-term jaw comfort. At Dentistae, our MDS Orthodontist offers both classic Full-Arch Metal Braces and discreet, removable Clear Aligners planned with a 3D intraoral scan.',
     whenToConsult: [
-      'Crowded, spaced, or rotated teeth affecting confidence or cleaning',
-      'Overbite, underbite, or crossbite concerns in teens or adults',
-      'Seeking discreet, removable clear aligners for everyday work and travel',
+      'Crowded, overlapping, or spaced teeth affecting confidence or flossing',
+      'Overbite, underbite, or crossbite alignment concerns in teens or adults',
+      'Wanting discreet, removable clear aligner trays tailored to busy schedules',
     ],
     visitSteps: [
       {
         step: '01',
         title: 'Orthodontic Evaluation & 3D Intraoral Scan',
         detail:
-          'Our orthodontist examines jaw alignment and performs a digital 3D scan (for aligner plans) to outline duration and transparent pricing.',
+          'Our orthodontist examines bite mechanics and captures a digital 3D scan (for aligner plans) to outline expected duration and transparent pricing.',
       },
       {
         step: '02',
         title: 'Custom Appliance Fitting',
         detail:
-          'Begin with precision-bonded braces or custom-trimmed clear aligner trays tailored to move teeth gently in planned stages.',
+          'Begin with precision-bonded full-arch braces or your first sets of custom-trimmed clear aligner trays.',
       },
       {
         step: '03',
-        title: 'Scheduled Progress Reviews & Retention',
+        title: 'Scheduled Progress Reviews',
         detail:
-          'Monthly adjustments for braces or periodic aligner check-ins keep movement on track, followed by retainers to protect your result.',
+          'Monthly adjustments for metal braces (included in the clinic tariff) or periodic 6-week aligner progress check-ins keep movement predictable.',
+      },
+      {
+        step: '04',
+        title: 'Retention Phase',
+        detail:
+          'Custom retainers help keep your newly aligned smile stable once active orthodontic movement finishes.',
       },
     ],
     faqs: [
       {
-        q: 'Do you offer both traditional braces and clear aligners?',
-        a: 'Yes. We provide Full Arch Metal Braces (including monthly orthodontic adjustments) as well as Clear Aligners with a final quote provided after a 3D intraoral scan.',
+        q: 'What are the indicative fees for braces vs clear aligners?',
+        a: 'Per our clinic file, Full Arch Metal Braces are ₹32,000 (including monthly orthodontic adjustments), and Clear Aligners start at ₹75,000 with a final quote confirmed after a 3D intraoral scan.',
       },
       {
-        q: 'When is the Orthodontist available at Banjara Hills?',
-        a: 'Check our live doctor schedule above or in the Front Desk Chat—our MDS Orthodontist sees patients on scheduled afternoon/evening clinic days.',
+        q: 'When is the Orthodontist available in Banjara Hills?',
+        a: 'Dr. Karthikeya Sharma (MDS Orthodontics) consults on scheduled afternoon and evening clinic days—check his live schedule on the Doctors section or ask our Front Desk Chat.',
       },
       {
-        q: 'Can adults start orthodontic treatment?',
-        a: 'Yes, healthy teeth can be aligned at any adult age after an in-person periodontal and orthodontic assessment.',
+        q: 'Can working adults start braces or aligners?',
+        a: 'Yes. Healthy teeth and gums can be aligned at any adult age after an in-person orthodontic evaluation.',
+      },
+    ],
+  },
+  {
+    slug: 'cosmetic-dentistry',
+    title: 'Cosmetic Dentistry',
+    shortTitle: 'Cosmetic Dentistry',
+    seoKeyword: 'Cosmetic dentist Hyderabad',
+    serviceMatchKeywords: ['crown', 'filling'],
+    defaultServiceName: 'Zirconia / Ceramic Dental Crown',
+    leadDoctorId: 'doc-meera',
+    image: CLINIC_IMAGES.docAnanya,
+    imagePosition: 'object-top',
+    featuredOnHome: true,
+    expectedVisits: '1 visit (fillings) · 2 visits (crowns)',
+    sessionDuration: '30–60 mins per appointment',
+    recoveryNote: 'Minimal to zero downtime; enjoy normal speech and gentle chewing immediately after cementation or polishing.',
+    summary:
+      'Natural-looking Zirconia and ceramic crowns and shade-matched composite fillings crafted for balanced, conservative smile aesthetics.',
+    detailedExplanation:
+      'Cosmetic and restorative dentistry focuses on repairing chipped, worn, discoloured, or weakened teeth so they blend invisibly with your natural enamel. We favour conservative tooth-coloured composite bonding and digitally scanned metal-free Zirconia or ceramic crowns.',
+    whenToConsult: [
+      'Chipped, worn, or uneven front teeth needing shade-matched composite repair',
+      'Replacing old dark metallic fillings with tooth-coloured composite restorations',
+      'Strengthening fractured or root-canal-treated teeth with Zirconia or ceramic crowns',
+    ],
+    visitSteps: [
+      {
+        step: '01',
+        title: 'Smile & Bite Consultation',
+        detail:
+          'Your dentist examines enamel thickness, bite contacts, and shade preferences before presenting conservative options and published clinic fees.',
+      },
+      {
+        step: '02',
+        title: 'Conservative Preparation & Digital Scan',
+        detail:
+          'Composite restorations are sculpted directly in one sitting; Zirconia or ceramic crowns use a clean digital scan for exact fit and margins.',
+      },
+      {
+        step: '03',
+        title: 'Shade Verification & Cementation',
+        detail:
+          'Every crown or filling is checked under natural clinic light for lifelike translucency and seamless colour match.',
+      },
+      {
+        step: '04',
+        title: 'Bite Refinement & Polish',
+        detail:
+          'Final bite balancing and high-gloss polishing protect both the restoration and opposing teeth.',
+      },
+    ],
+    faqs: [
+      {
+        q: 'What cosmetic treatments are listed in the clinic tariff file?',
+        a: 'Our published file covers Tooth-Coloured Composite Fillings (₹1,500 – ₹2,500), Zirconia / Ceramic Dental Crowns (₹8,000 – ₹14,000 including digital scan and cementation), and In-Office Teeth Whitening (₹9,000).',
+      },
+      {
+        q: 'Are composite fillings matched to my natural tooth shade?',
+        a: 'Yes, multi-shade composite resin is layered and polished to blend seamlessly with surrounding enamel.',
+      },
+      {
+        q: 'Do senior citizens receive any diagnostic benefit?',
+        a: 'Per clinic policy, senior citizens aged 65+ receive a complimentary Digital X-Ray (RVG) with a paid consultation.',
+      },
+    ],
+  },
+  {
+    slug: 'dental-cleaning',
+    title: 'Dental Cleaning',
+    shortTitle: 'Dental Cleaning',
+    seoKeyword: 'Dental cleaning scaling polishing Banjara Hills',
+    serviceMatchKeywords: ['scaling', 'cleaning', 'polish'],
+    defaultServiceName: 'Scaling & Polishing (Teeth Cleaning)',
+    leadDoctorId: 'doc-meera',
+    image: CLINIC_IMAGES.docMeera,
+    imagePosition: 'object-top',
+    featuredOnHome: true,
+    expectedVisits: '1 single visit (recommended every 6 months)',
+    sessionDuration: '30–45 mins',
+    recoveryNote: 'Zero downtime—you can return to work immediately; mild cold sensitivity settles within 24 hours.',
+    summary:
+      'Gentle ultrasonic scaling and stain-removing polishing in Banjara Hills to clear plaque, hardened tartar, and protect long-term gum health.',
+    detailedExplanation:
+      'Even thorough daily brushing leaves hardened mineralised tartar (calculus) along the gumline and behind lower front teeth. Professional ultrasonic dental cleaning vibrates away plaque and tartar deposits without scraping healthy enamel, followed by smooth polishing to lift tea and coffee surface stains.',
+    whenToConsult: [
+      'Routine 6-month preventive dental check-up and hygiene maintenance',
+      'Visible yellow or brown tartar buildup near the gumline or behind lower teeth',
+      'Surface staining from tea, coffee, or noticing gums bleed slightly while brushing',
+    ],
+    visitSteps: [
+      {
+        step: '01',
+        title: 'Oral & Gum Health Check',
+        detail:
+          'Your dentist evaluates gum pockets, plaque accumulation, and early signs of decay before starting cleaning.',
+      },
+      {
+        step: '02',
+        title: 'Ultrasonic Scaling',
+        detail:
+          'A gentle water-cooled ultrasonic scaler dislodges plaque and hardened calculus comfortably along and beneath the gumline.',
+      },
+      {
+        step: '03',
+        title: 'Surface Polishing & Stain Removal',
+        detail:
+          'Fine polishing paste buffs away everyday surface stains and smooths enamel so new plaque adheres less easily.',
+      },
+      {
+        step: '04',
+        title: 'Personalised Home Hygiene Guidance',
+        detail:
+          'Receive practical brushing, interdental flossing, and 6-month recall recommendations tailored to your gums.',
+      },
+    ],
+    faqs: [
+      {
+        q: 'Does dental scaling loosen teeth or damage enamel?',
+        a: 'No. Ultrasonic scaling removes hardened tartar and plaque only—it does not grind enamel or loosen healthy teeth; in fact, removing tartar helps keep gums and bone healthy.',
+      },
+      {
+        q: 'How often should I get professional dental cleaning?',
+        a: 'Most adults benefit from routine Scaling & Polishing every 6 months, though your dentist will advise the best interval based on your gum health.',
+      },
+      {
+        q: 'What is the indicative fee for dental cleaning?',
+        a: 'Our published tariff for Scaling & Polishing (Teeth Cleaning) is ₹1,200 (ultrasonic scaling and stain removal). Consultation & Oral Check-up is ₹500.',
       },
     ],
   },
@@ -294,13 +477,20 @@ export const TREATMENT_PAGES: TreatmentPageSpec[] = [
     serviceMatchKeywords: ['wisdom', 'extract'],
     defaultServiceName: 'Surgical Wisdom Tooth Removal',
     leadDoctorId: 'doc-vikram',
-    image: CLINIC_IMAGES.heroSuite,
+    image: CLINIC_IMAGES.docVikram,
+    imagePosition: 'object-top',
+    featuredOnHome: false,
+    expectedVisits: '1 surgical visit + 1 suture check (if needed)',
+    sessionDuration: '30–60 mins depending on impaction',
+    recoveryNote: 'Soft-diet guidance and gentle recovery over 3–5 days; suture review after 7 days if stitches are placed.',
     summary:
       'Gentle simple extractions and surgical removal of impacted wisdom teeth performed by our Oral & Maxillofacial Surgeon in Banjara Hills.',
+    detailedExplanation:
+      'Third molars (wisdom teeth) often lack sufficient jaw space to erupt straight, causing impaction, food trapping, or pressure against neighbouring molars. Our Oral & Maxillofacial Surgeon assesses root alignment digitally to perform either a simple extraction or atraumatic surgical removal under local anaesthesia.',
     whenToConsult: [
       'Recurring jaw tightness, cheek biting, or gum soreness behind the last molar',
       'Impacted or angled wisdom teeth pressing against adjacent molars',
-      'Food trapping and recurring cavities around partially erupted third molars',
+      'Food trapping and recurring decay around partially erupted third molars',
     ],
     visitSteps: [
       {
@@ -325,7 +515,7 @@ export const TREATMENT_PAGES: TreatmentPageSpec[] = [
     faqs: [
       {
         q: 'Why does wisdom tooth surgery have a fee range?',
-        a: 'Tariffs depend on whether the tooth is fully erupted (simple extraction) or partially/fully impacted in bone, which our surgeon confirms after examination.',
+        a: 'Tariffs depend on whether the tooth is fully erupted (Simple Tooth Extraction ₹1,500) or partially/fully impacted in bone (Surgical Wisdom Tooth Removal ₹4,500 – ₹7,500), confirmed after examination.',
       },
       {
         q: 'What is the cancellation policy for surgical slots?',
@@ -337,58 +527,9 @@ export const TREATMENT_PAGES: TreatmentPageSpec[] = [
       },
     ],
   },
-  {
-    slug: 'cosmetic-dentistry',
-    title: 'Cosmetic Dentistry & Crowns',
-    shortTitle: 'Cosmetic Dentistry',
-    seoKeyword: 'Cosmetic dentist Hyderabad',
-    serviceMatchKeywords: ['crown', 'filling', 'scaling'],
-    defaultServiceName: 'Zirconia / Ceramic Dental Crown',
-    leadDoctorId: 'doc-meera',
-    image: CLINIC_IMAGES.reception,
-    summary:
-      'Natural-looking Zirconia and ceramic crowns, tooth-coloured composite fillings, and ultrasonic scaling & polishing crafted for balanced smiles.',
-    whenToConsult: [
-      'Chipped, worn, or discoloured front or back teeth needing shade-matched repair',
-      'Replacing dark metallic fillings with tooth-coloured composite restorations',
-      'Protecting weakened teeth with digitally scanned Zirconia or ceramic crowns',
-    ],
-    visitSteps: [
-      {
-        step: '01',
-        title: 'Smile Assessment & Digital Shade Matching',
-        detail:
-          'Your dentist evaluates tooth structure, bite, and natural enamel shade to recommend conservative restorative options.',
-      },
-      {
-        step: '02',
-        title: 'Precision Restoration or Digital Crown Scan',
-        detail:
-          'Composite fillings are layered and polished in a single visit; Zirconia and ceramic crowns use digital scanning for accurate margins.',
-      },
-      {
-        step: '03',
-        title: 'Final Fit, Bite Check & Polish',
-        detail:
-          'Every restoration is checked for comfortable bite contact and natural translucency before completion.',
-      },
-    ],
-    faqs: [
-      {
-        q: 'Which cosmetic and restorative services are listed in your clinic file?',
-        a: 'Our published tariffs cover Tooth-Coloured Composite Fillings, Zirconia / Ceramic Dental Crowns (including digital scan and cementation), In-Office Teeth Whitening, and Ultrasonic Scaling & Polishing.',
-      },
-      {
-        q: 'Are composite fillings matched to my natural tooth colour?',
-        a: 'Yes, shade-matched composite resin is sculpted to blend seamlessly with surrounding enamel.',
-      },
-      {
-        q: 'Do senior citizens get any complimentary diagnostic benefit?',
-        a: 'Per clinic policy, senior citizens aged 65+ receive a complimentary Digital X-Ray (RVG) with a paid consultation.',
-      },
-    ],
-  },
 ];
+
+export const FEATURED_TREATMENT_PAGES = TREATMENT_PAGES.filter((t) => t.featuredOnHome);
 
 export function resolveTreatmentService(
   spec: TreatmentPageSpec,
