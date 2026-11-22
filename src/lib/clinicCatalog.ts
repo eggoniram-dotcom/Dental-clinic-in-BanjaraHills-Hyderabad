@@ -655,15 +655,16 @@ export function resolveTreatmentServicesAll(
   });
 }
 
+export const DEFAULT_WHATSAPP_MESSAGE =
+  'Hello, I found your dental clinic website. I would like to enquire about an appointment.';
+
 export function buildWhatsAppLink(clinicData: ClinicData, customMessage?: string): string {
   const digits = (clinicData.emergencyPhone || clinicData.phone || '+919849011223').replace(
     /\D/g,
     '',
   );
   const normalized = digits.startsWith('91') ? digits : `91${digits}`;
-  const text =
-    customMessage ||
-    `Hello ${clinicData.clinicName}, I would like to enquire about an appointment at your Banjara Hills clinic.`;
+  const text = customMessage?.trim() || DEFAULT_WHATSAPP_MESSAGE;
   return `https://wa.me/${normalized}?text=${encodeURIComponent(text)}`;
 }
 

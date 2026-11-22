@@ -20,9 +20,14 @@ import {
   Stethoscope,
   X,
 } from 'lucide-react';
-import { apiGetSessionMessages, apiSendChatMessage } from '../lib/clinicApi.ts';
+import {
+  apiCaptureWhatsAppEnquiry,
+  apiGetSessionMessages,
+  apiSendChatMessage,
+} from '../lib/clinicApi.ts';
 import {
   CLINIC_IMAGES,
+  DEFAULT_WHATSAPP_MESSAGE,
   FEATURED_TREATMENT_PAGES,
   buildGoogleMapsDirectionsLink,
   buildWhatsAppLink,
@@ -413,6 +418,13 @@ export function PatientChatPage({
                     href={whatsAppHref}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => {
+                      void apiCaptureWhatsAppEnquiry({
+                        treatment: 'General Appointment Enquiry',
+                        sourcePage: '/#hero',
+                        prefilledMessage: DEFAULT_WHATSAPP_MESSAGE,
+                      });
+                    }}
                     className="inline-flex items-center justify-center gap-2 min-h-[48px] px-5 py-3 rounded-xl border border-emerald-900/20 bg-emerald-50/80 text-emerald-950 text-sm font-semibold hover:bg-emerald-100 transition-colors whitespace-nowrap shrink-0"
                   >
                     <MessageCircle className="w-4 h-4 text-emerald-700" aria-hidden="true" />
@@ -544,10 +556,8 @@ export function PatientChatPage({
             const matchedService = resolveTreatmentService(item, clinicData);
             const livePrice = matchedService?.price;
             const imgKey = `treat-${item.slug}`;
-            const waTreatmentHref = buildWhatsAppLink(
-              clinicData,
-              `Hello ${clinicData.clinicName}, I would like to enquire about ${item.title}.`,
-            );
+            const waTreatmentMessage = `${DEFAULT_WHATSAPP_MESSAGE} (Treatment: ${item.title})`;
+            const waTreatmentHref = buildWhatsAppLink(clinicData, waTreatmentMessage);
 
             return (
               <article
@@ -607,6 +617,13 @@ export function PatientChatPage({
                     href={waTreatmentHref}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => {
+                      void apiCaptureWhatsAppEnquiry({
+                        treatment: matchedService?.name || item.title,
+                        sourcePage: `/#treatments (${item.slug})`,
+                        prefilledMessage: waTreatmentMessage,
+                      });
+                    }}
                     className="inline-flex items-center gap-1.5 min-h-[40px] px-3 py-2 rounded-xl text-xs font-semibold text-emerald-800 hover:bg-emerald-50 transition-colors whitespace-nowrap"
                   >
                     <MessageCircle className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" />
@@ -1909,6 +1926,13 @@ export function PatientChatPage({
                     href={whatsAppHref}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => {
+                      void apiCaptureWhatsAppEnquiry({
+                        treatment: 'General Appointment Enquiry',
+                        sourcePage: '/#book-appointment',
+                        prefilledMessage: DEFAULT_WHATSAPP_MESSAGE,
+                      });
+                    }}
                     className="inline-flex items-center justify-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl border border-emerald-950/15 bg-white text-emerald-950 text-sm font-semibold hover:bg-emerald-50 transition-colors whitespace-nowrap"
                   >
                     <MessageCircle className="w-4 h-4 text-emerald-700" aria-hidden="true" />

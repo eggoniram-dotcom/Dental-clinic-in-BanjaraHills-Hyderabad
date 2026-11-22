@@ -5,6 +5,7 @@ import {
   type LanguageCode,
   type LeadEnquiry,
   type LeadStatus,
+  type ReceptionistNotification,
   type Ticket,
   type TicketStatus,
 } from '../types.ts';
@@ -14,6 +15,7 @@ const LS_CLINIC_KEY = 'dentistae_clinic_data_v1';
 const LS_TICKETS_KEY = 'dentistae_tickets_v1';
 const LS_SESSIONS_KEY = 'dentistae_sessions_v1';
 const LS_LEADS_KEY = 'dentistae_leads_v1';
+const LS_NOTIFICATIONS_KEY = 'dentistae_notifications_v1';
 
 const PRIORITY_WEIGHT: Record<TicketStatus, number> = {
   urgent: 0,
@@ -829,7 +831,137 @@ export function localCreateLead(input: {
 
   leads.push(lead);
   writeStorage(LS_LEADS_KEY, leads);
+
+  localAddNotification({
+    channel: input.source === 'whatsapp-click' ? 'whatsapp' : 'booking',
+    title:
+      input.source === 'whatsapp-click'
+        ? 'New WhatsApp Enquiry Captured'
+        : 'New Appointment Enquiry',
+    summary: `${lead.patientName} requested ${lead.treatment}${lead.preferredDate ? ` (${lead.preferredDate})` : ''}.`,
+    treatment: lead.treatment,
+    patientName: lead.patientName,
+    phone: lead.phone,
+    leadId: lead.id,
+    ticketId: ticket.id,
+  });
+
   return { lead, ticket };
+}
+
+export function localGetAllNotifications(): ReceptionistNotification[] {
+  const items = readStorage<ReceptionistNotification[]>(LS_NOTIFICATIONS_KEY, []);
+  return [...items].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+}
+
+function localAddNotification(input: {
+  channel: ReceptionistNotification['channel'];
+  title: string;
+  summary: string;
+  treatment?: string;
+  sourcePage?: string;
+  prefilledMessage?: string;
+  patientName?: string;
+  phone?: string;
+  leadId?: string;
+  ticketId?: string;
+}): ReceptionistNotification {
+  const items = readStorage<ReceptionistNotification[]>(LS_NOTIFICATIONS_KEY, []);
+  const notif: ReceptionistNotification = {
+    id: `NTF-${Date.now()}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
+    channel: input.channel,
+    title: input.title,
+    summary: input.summary,
+    treatment: input.treatment,
+    sourcePage: input.sourcePage,
+    prefilledMessage: input.prefilledMessage,
+    patientName: input.patientName,
+    phone: input.phone,
+    leadId: input.leadId,
+    ticketId: input.ticketId,
+    read: false,
+    createdAt: new Date().toISOString(),
+  };
+  writeStorage(LS_NOTIFICATIONS_KEY, [notif, ...items].slice(0, 60));
+  return notif;
+}
+
+export function localMarkNotificationRead(id: string): ReceptionistNotification | null {
+  const items = readStorage<ReceptionistNotification[]>(LS_NOTIFICATIONS_KEY, []);
+  const idx = items.findIndex((n) => n.id === id);
+  if (idx === -1) return null;
+  items[idx] = { ...items[idx], read: true };
+  writeStorage(LS_NOTIFICATIONS_KEY, items);
+  return items[idx];
+}
+
+export function localMarkAllNotificationsRead(): ReceptionistNotification[] {
+  const items = readStorage<ReceptionistNotification[]>(LS_NOTIFICATIONS_KEY, []).map((n) => ({
+    ...n,
+    read: true,
+  }));
+  writeStorage(LS_NOTIFICATIONS_KEY, items);
+  return localGetAllNotifications();
+}
+
+export function localCaptureWhatsAppEnquiry(input: {
+  treatment?: string;
+  sourcePage?: string;
+  prefilledMessage: string;
+  patientName?: string;
+  phone?: string;
+}): { lead: LeadEnquiry; ticket: Ticket; notification: ReceptionistNotification } {
+  const leads = readStorage<LeadEnquiry[]>(LS_LEADS_KEY, []);
+  const now = new Date().toISOString();
+  const todayIso = now.slice(0, 10);
+  const treatment = input.treatment?.trim() || 'WhatsApp Appointment Enquiry';
+  const patientName = input.patientName?.trim() || 'WhatsApp Website Visitor';
+  const phone = input.phone?.trim() || 'Via WhatsApp Chat';
+  const sourcePage = input.sourcePage?.trim() || '/';
+
+  const ticket = localCreateTicket({
+    sessionId: `wa-${Date.now()}`,
+    patientName,
+    question: `[WhatsApp Enquiry from ${sourcePage}] ${input.prefilledMessage}${input.phone?.trim() ? ` | Phone: ${input.phone.trim()}` : ''}`,
+    status: 'needs human',
+    category: 'booking',
+    bookingTime: 'WhatsApp enquiry (check WhatsApp Business)',
+  });
+
+  const lead: LeadEnquiry = {
+    id: `LD-${String(leads.length + 201)}`,
+    patientName,
+    phone,
+    treatment,
+    preferredDate: todayIso,
+    preferredTime: 'WhatsApp Enquiry',
+    message: `${input.prefilledMessage} (Source: ${sourcePage})`,
+    source: 'whatsapp-click',
+    status: 'New',
+    ticketId: ticket.id,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  leads.push(lead);
+  writeStorage(LS_LEADS_KEY, leads);
+
+  const notification = localAddNotification({
+    channel: 'whatsapp',
+    title: 'WhatsApp Enquiry Opened',
+    summary: `${patientName} opened WhatsApp from ${sourcePage} for ${treatment}.`,
+    treatment,
+    sourcePage,
+    prefilledMessage: input.prefilledMessage,
+    patientName,
+    phone: input.phone?.trim() || undefined,
+    leadId: lead.id,
+    ticketId: ticket.id,
+  });
+
+  return { lead, ticket, notification };
 }
 
 export function localUpdateLead(

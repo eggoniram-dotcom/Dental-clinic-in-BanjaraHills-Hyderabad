@@ -97,7 +97,7 @@ export interface LeadEnquiry {
   preferredDate: string;
   preferredTime?: string;
   message?: string;
-  source: 'appointment-form' | 'treatment-page' | 'chat-booking' | 'demo-sample';
+  source: 'appointment-form' | 'treatment-page' | 'chat-booking' | 'whatsapp-click' | 'demo-sample';
   status: LeadStatus;
   followUpNote?: string;
   followUpDate?: string;
@@ -105,5 +105,21 @@ export interface LeadEnquiry {
   ticketId?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ReceptionistNotification {
+  id: string;
+  channel: 'whatsapp' | 'booking' | 'urgent';
+  title: string;
+  summary: string;
+  treatment?: string;
+  sourcePage?: string;
+  prefilledMessage?: string;
+  patientName?: string;
+  phone?: string;
+  leadId?: string;
+  ticketId?: string;
+  read: boolean;
+  createdAt: string;
 }
 

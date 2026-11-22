@@ -11,7 +11,9 @@ import {
   ShieldCheck,
   Stethoscope,
 } from 'lucide-react';
+import { apiCaptureWhatsAppEnquiry } from '../lib/clinicApi.ts';
 import {
+  DEFAULT_WHATSAPP_MESSAGE,
   FEATURED_TREATMENT_PAGES,
   TREATMENT_PAGES,
   buildWhatsAppLink,
@@ -51,10 +53,8 @@ export function TreatmentDetailPage({
   const specialist = clinicData.doctors[docIndex] ?? clinicData.doctors[0];
   const docEnrichment = specialist ? getDoctorEnrichment(specialist, docIndex) : null;
 
-  const waHref = buildWhatsAppLink(
-    clinicData,
-    `Hello ${clinicData.clinicName}, I would like to enquire about ${spec.title} at your Banjara Hills clinic.`,
-  );
+  const waMessage = `${DEFAULT_WHATSAPP_MESSAGE} (Treatment: ${spec.title})`;
+  const waHref = buildWhatsAppLink(clinicData, waMessage);
 
   const otherTreatments = FEATURED_TREATMENT_PAGES.filter((t) => t.slug !== spec.slug);
 
@@ -108,6 +108,13 @@ export function TreatmentDetailPage({
                   href={waHref}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() => {
+                    void apiCaptureWhatsAppEnquiry({
+                      treatment: primaryService?.name || spec.title,
+                      sourcePage: `/treatments/${spec.slug}`,
+                      prefilledMessage: waMessage,
+                    });
+                  }}
                   className="inline-flex items-center justify-center gap-2 min-h-[46px] px-5 py-3 rounded-xl border border-emerald-900/20 bg-emerald-50/80 text-emerald-950 text-sm font-semibold hover:bg-emerald-100 transition-colors whitespace-nowrap"
                 >
                   <MessageCircle className="w-4 h-4 text-emerald-700" aria-hidden="true" />

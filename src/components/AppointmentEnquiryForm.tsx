@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Calendar, CheckCircle2, MessageCircle } from 'lucide-react';
-import { apiCreateLead } from '../lib/clinicApi.ts';
-import { buildWhatsAppLink } from '../lib/clinicCatalog.ts';
+import { apiCaptureWhatsAppEnquiry, apiCreateLead } from '../lib/clinicApi.ts';
+import { DEFAULT_WHATSAPP_MESSAGE, buildWhatsAppLink } from '../lib/clinicCatalog.ts';
 import type { ClinicData, LeadEnquiry } from '../types.ts';
 
 interface AppointmentEnquiryFormProps {
@@ -340,10 +340,19 @@ export function AppointmentEnquiryForm({
         <a
           href={buildWhatsAppLink(
             clinicData,
-            `Hello ${clinicData.clinicName}, I would like to book ${treatment} on ${preferredDate}.`,
+            `${DEFAULT_WHATSAPP_MESSAGE} (Treatment: ${treatment}, Preferred date: ${preferredDate})`,
           )}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={() => {
+            void apiCaptureWhatsAppEnquiry({
+              treatment,
+              sourcePage: source === 'treatment-page' ? 'treatment-booking-form' : 'homepage-booking-form',
+              prefilledMessage: `${DEFAULT_WHATSAPP_MESSAGE} (Treatment: ${treatment}, Preferred date: ${preferredDate})`,
+              patientName: patientName.trim() || undefined,
+              phone: phone.trim() || undefined,
+            });
+          }}
           className="inline-flex items-center justify-center gap-2 min-h-[46px] px-5 py-3 rounded-xl border border-emerald-950/15 bg-white text-emerald-950 text-sm font-semibold hover:bg-emerald-50 transition-colors whitespace-nowrap"
         >
           <MessageCircle className="w-4 h-4 text-emerald-700" aria-hidden="true" />

@@ -6,6 +6,7 @@ import type {
   ClinicData,
   LeadEnquiry,
   LeadStatus,
+  ReceptionistNotification,
   Ticket,
   TicketStatus,
 } from './types.ts';
@@ -15,6 +16,7 @@ const CLINIC_FILE_PATH = path.join(DATA_DIR, 'clinic-data.json');
 const TICKETS_FILE_PATH = path.join(DATA_DIR, 'tickets.json');
 const SESSIONS_FILE_PATH = path.join(DATA_DIR, 'sessions.json');
 const LEADS_FILE_PATH = path.join(DATA_DIR, 'leads.json');
+const NOTIFICATIONS_FILE_PATH = path.join(DATA_DIR, 'notifications.json');
 
 function ensureDataDir(): void {
   if (!fs.existsSync(DATA_DIR)) {
@@ -43,6 +45,7 @@ let clinicDataCache: ClinicData | null = null;
 let ticketsCache: Ticket[] | null = null;
 let sessionsCache: Record<string, ChatMessage[]> | null = null;
 let leadsCache: LeadEnquiry[] | null = null;
+let notificationsCache: ReceptionistNotification[] | null = null;
 
 export function normalizeClinicData(input: Partial<ClinicData> | null | undefined): ClinicData {
   const base = structuredClone(DEFAULT_CLINIC_DATA);
@@ -325,7 +328,148 @@ export function createLead(input: {
 
   leads.push(lead);
   saveLeads(leads);
+
+  addReceptionistNotification({
+    channel: input.source === 'whatsapp-click' ? 'whatsapp' : 'booking',
+    title:
+      input.source === 'whatsapp-click'
+        ? 'New WhatsApp Enquiry Captured'
+        : 'New Appointment Enquiry',
+    summary: `${lead.patientName} requested ${lead.treatment}${lead.preferredDate ? ` (${lead.preferredDate})` : ''}.`,
+    treatment: lead.treatment,
+    patientName: lead.patientName,
+    phone: lead.phone,
+    leadId: lead.id,
+    ticketId: ticket.id,
+  });
+
   return { lead, ticket };
+}
+
+function loadNotifications(): ReceptionistNotification[] {
+  if (!notificationsCache) {
+    ensureDataDir();
+    notificationsCache = readJsonFile<ReceptionistNotification[]>(NOTIFICATIONS_FILE_PATH, []);
+  }
+  return notificationsCache;
+}
+
+function saveNotifications(items: ReceptionistNotification[]): void {
+  notificationsCache = items;
+  writeJsonFile(NOTIFICATIONS_FILE_PATH, items);
+}
+
+export function getAllNotifications(): ReceptionistNotification[] {
+  const items = loadNotifications();
+  return [...items].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+}
+
+export function addReceptionistNotification(input: {
+  channel: ReceptionistNotification['channel'];
+  title: string;
+  summary: string;
+  treatment?: string;
+  sourcePage?: string;
+  prefilledMessage?: string;
+  patientName?: string;
+  phone?: string;
+  leadId?: string;
+  ticketId?: string;
+}): ReceptionistNotification {
+  const items = loadNotifications();
+  const notif: ReceptionistNotification = {
+    id: `NTF-${Date.now()}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
+    channel: input.channel,
+    title: input.title,
+    summary: input.summary,
+    treatment: input.treatment,
+    sourcePage: input.sourcePage,
+    prefilledMessage: input.prefilledMessage,
+    patientName: input.patientName,
+    phone: input.phone,
+    leadId: input.leadId,
+    ticketId: input.ticketId,
+    read: false,
+    createdAt: new Date().toISOString(),
+  };
+  items.unshift(notif);
+  saveNotifications(items.slice(0, 60));
+  return notif;
+}
+
+export function markNotificationRead(id: string): ReceptionistNotification | null {
+  const items = loadNotifications();
+  const idx = items.findIndex((n) => n.id === id);
+  if (idx === -1) return null;
+  items[idx] = { ...items[idx], read: true };
+  saveNotifications(items);
+  return items[idx];
+}
+
+export function markAllNotificationsRead(): ReceptionistNotification[] {
+  const items = loadNotifications().map((n) => ({ ...n, read: true }));
+  saveNotifications(items);
+  return getAllNotifications();
+}
+
+export function captureWhatsAppEnquiry(input: {
+  treatment?: string;
+  sourcePage?: string;
+  prefilledMessage: string;
+  patientName?: string;
+  phone?: string;
+}): { lead: LeadEnquiry; ticket: Ticket; notification: ReceptionistNotification } {
+  const leads = loadLeads();
+  const now = new Date().toISOString();
+  const todayIso = now.slice(0, 10);
+  const treatment = input.treatment?.trim() || 'WhatsApp Appointment Enquiry';
+  const patientName = input.patientName?.trim() || 'WhatsApp Website Visitor';
+  const phone = input.phone?.trim() || 'Via WhatsApp Chat';
+  const sourcePage = input.sourcePage?.trim() || '/';
+
+  const ticket = createTicket({
+    sessionId: `wa-${Date.now()}`,
+    patientName,
+    question: `[WhatsApp Enquiry from ${sourcePage}] ${input.prefilledMessage}${input.phone?.trim() ? ` | Phone: ${input.phone.trim()}` : ''}`,
+    status: 'needs human',
+    category: 'booking',
+    bookingTime: 'WhatsApp enquiry (check WhatsApp Business)',
+  });
+
+  const lead: LeadEnquiry = {
+    id: `LD-${String(leads.length + 201)}`,
+    patientName,
+    phone,
+    treatment,
+    preferredDate: todayIso,
+    preferredTime: 'WhatsApp Enquiry',
+    message: `${input.prefilledMessage} (Source: ${sourcePage})`,
+    source: 'whatsapp-click',
+    status: 'New',
+    ticketId: ticket.id,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  leads.push(lead);
+  saveLeads(leads);
+
+  const notification = addReceptionistNotification({
+    channel: 'whatsapp',
+    title: 'WhatsApp Enquiry Opened',
+    summary: `${patientName} opened WhatsApp from ${sourcePage} for ${treatment}.`,
+    treatment,
+    sourcePage,
+    prefilledMessage: input.prefilledMessage,
+    patientName,
+    phone: input.phone?.trim() || undefined,
+    leadId: lead.id,
+    ticketId: ticket.id,
+  });
+
+  return { lead, ticket, notification };
 }
 
 export function updateLead(

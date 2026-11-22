@@ -4,24 +4,35 @@ import {
   type ClinicData,
   type LeadEnquiry,
   type LeadStatus,
+  type ReceptionistNotification,
   type Ticket,
   type TicketStatus,
 } from '../types.ts';
 import {
   localAddTicketReply,
+  localCaptureWhatsAppEnquiry,
   localClearDemoLeads,
   localCreateLead,
   localGetAllLeads,
+  localGetAllNotifications,
   localGetAllTickets,
   localGetClinicData,
   localGetSessionMessages,
   localHandleChat,
+  localMarkAllNotificationsRead,
+  localMarkNotificationRead,
   localResetClinicData,
   localSeedDemoLeads,
   localUpdateClinicData,
   localUpdateLead,
   localUpdateTicketStatus,
 } from './localClinicEngine.ts';
+
+function notifyReceptionistBadge(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('dentistae:notifications-updated'));
+  }
+}
 
 let backendMode: 'unknown' | 'server' | 'static' = 'unknown';
 let probePromise: Promise<boolean> | null = null;
@@ -251,13 +262,17 @@ export async function apiCreateLead(input: {
         body: JSON.stringify(input),
       });
       if (await isJsonResponse(res)) {
-        return (await res.json()) as { lead: LeadEnquiry; ticket?: Ticket };
+        const created = (await res.json()) as { lead: LeadEnquiry; ticket?: Ticket };
+        notifyReceptionistBadge();
+        return created;
       }
     } catch {
       backendMode = 'static';
     }
   }
-  return localCreateLead(input);
+  const localCreated = localCreateLead(input);
+  notifyReceptionistBadge();
+  return localCreated;
 }
 
 export async function apiUpdateLead(
@@ -322,5 +337,104 @@ export async function apiClearDemoLeads(): Promise<LeadEnquiry[]> {
     }
   }
   return localClearDemoLeads();
+}
+
+export async function apiCaptureWhatsAppEnquiry(input: {
+  treatment?: string;
+  sourcePage?: string;
+  prefilledMessage: string;
+  patientName?: string;
+  phone?: string;
+}): Promise<{
+  lead: LeadEnquiry;
+  ticket: Ticket;
+  notification: ReceptionistNotification;
+}> {
+  const hasBackend = await detectBackendAvailable();
+  if (hasBackend) {
+    try {
+      const res = await fetch('/api/whatsapp-enquiry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      if (await isJsonResponse(res)) {
+        const data = (await res.json()) as {
+          lead: LeadEnquiry;
+          ticket: Ticket;
+          notification: ReceptionistNotification;
+        };
+        notifyReceptionistBadge();
+        return data;
+      }
+    } catch {
+      backendMode = 'static';
+    }
+  }
+  const localData = localCaptureWhatsAppEnquiry(input);
+  notifyReceptionistBadge();
+  return localData;
+}
+
+export async function apiGetNotifications(): Promise<ReceptionistNotification[]> {
+  const hasBackend = await detectBackendAvailable();
+  if (hasBackend) {
+    try {
+      const res = await fetch('/api/notifications');
+      if (await isJsonResponse(res)) {
+        const data = (await res.json()) as { notifications?: ReceptionistNotification[] };
+        if (Array.isArray(data.notifications)) {
+          return data.notifications;
+        }
+      }
+    } catch {
+      backendMode = 'static';
+    }
+  }
+  return localGetAllNotifications();
+}
+
+export async function apiMarkNotificationRead(
+  id: string,
+): Promise<ReceptionistNotification | null> {
+  const hasBackend = await detectBackendAvailable();
+  if (hasBackend) {
+    try {
+      const res = await fetch(`/api/notifications/${encodeURIComponent(id)}/read`, {
+        method: 'PATCH',
+      });
+      if (await isJsonResponse(res)) {
+        const data = (await res.json()) as { notification?: ReceptionistNotification };
+        notifyReceptionistBadge();
+        return data.notification ?? null;
+      }
+    } catch {
+      backendMode = 'static';
+    }
+  }
+  const localRes = localMarkNotificationRead(id);
+  notifyReceptionistBadge();
+  return localRes;
+}
+
+export async function apiMarkAllNotificationsRead(): Promise<ReceptionistNotification[]> {
+  const hasBackend = await detectBackendAvailable();
+  if (hasBackend) {
+    try {
+      const res = await fetch('/api/notifications/read-all', { method: 'POST' });
+      if (await isJsonResponse(res)) {
+        const data = (await res.json()) as { notifications?: ReceptionistNotification[] };
+        notifyReceptionistBadge();
+        if (Array.isArray(data.notifications)) {
+          return data.notifications;
+        }
+      }
+    } catch {
+      backendMode = 'static';
+    }
+  }
+  const localRes = localMarkAllNotificationsRead();
+  notifyReceptionistBadge();
+  return localRes;
 }
 

@@ -6,12 +6,16 @@ import { processPatientMessage } from './server/clinicEngine.ts';
 import {
   addTicketReply,
   appendSessionMessage,
+  captureWhatsAppEnquiry,
   clearDemoLeads,
   createLead,
   getAllLeads,
+  getAllNotifications,
   getAllTickets,
   getClinicData,
   getSessionMessages,
+  markAllNotificationsRead,
+  markNotificationRead,
   resetClinicData,
   seedDemoLeads,
   updateClinicData,
@@ -236,6 +240,46 @@ async function startServer(): Promise<void> {
 
   app.delete('/api/leads/demo', (_req, res) => {
     res.json({ leads: clearDemoLeads() });
+  });
+
+  // WhatsApp automation & receptionist notification endpoints
+  app.post('/api/whatsapp-enquiry', (req, res) => {
+    const body = req.body as {
+      treatment?: string;
+      sourcePage?: string;
+      prefilledMessage?: string;
+      patientName?: string;
+      phone?: string;
+    };
+    const prefilledMessage =
+      body?.prefilledMessage?.trim() ||
+      'Hello, I found your dental clinic website. I would like to enquire about an appointment.';
+
+    const captured = captureWhatsAppEnquiry({
+      treatment: body?.treatment,
+      sourcePage: body?.sourcePage,
+      prefilledMessage,
+      patientName: body?.patientName,
+      phone: body?.phone,
+    });
+    res.status(201).json(captured);
+  });
+
+  app.get('/api/notifications', (_req, res) => {
+    res.json({ notifications: getAllNotifications() });
+  });
+
+  app.post('/api/notifications/read-all', (_req, res) => {
+    res.json({ notifications: markAllNotificationsRead() });
+  });
+
+  app.patch('/api/notifications/:id/read', (req, res) => {
+    const updated = markNotificationRead(req.params.id);
+    if (!updated) {
+      res.status(404).json({ error: 'Notification not found.' });
+      return;
+    }
+    res.json({ notification: updated });
   });
 
   const isProd = process.env.NODE_ENV === 'production';

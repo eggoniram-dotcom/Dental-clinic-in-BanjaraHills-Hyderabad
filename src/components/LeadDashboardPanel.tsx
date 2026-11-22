@@ -380,9 +380,11 @@ export function LeadDashboardPanel({ clinicData }: LeadDashboardPanelProps) {
                       <span>
                         {lead.source === 'demo-sample'
                           ? 'Illustrative Demo Row'
-                          : lead.source === 'treatment-page'
-                            ? 'Treatment Page Enquiry'
-                            : 'Website Appointment Form'}
+                          : lead.source === 'whatsapp-click'
+                            ? 'WhatsApp Auto-Capture'
+                            : lead.source === 'treatment-page'
+                              ? 'Treatment Page Enquiry'
+                              : 'Website Appointment Form'}
                       </span>
                       {lead.ticketId && (
                         <>
@@ -406,13 +408,17 @@ export function LeadDashboardPanel({ clinicData }: LeadDashboardPanelProps) {
                     </p>
 
                     <p className="mt-1 text-xs text-slate-600 tabular-nums">
-                      Phone:{' '}
-                      <a
-                        href={`tel:${lead.phone.replace(/\s+/g, '')}`}
-                        className="font-medium text-emerald-900 hover:underline"
-                      >
-                        {lead.phone}
-                      </a>
+                      Contact:{' '}
+                      {/\d{7,}/.test(lead.phone) ? (
+                        <a
+                          href={`tel:${lead.phone.replace(/\s+/g, '')}`}
+                          className="font-medium text-emerald-900 hover:underline"
+                        >
+                          {lead.phone}
+                        </a>
+                      ) : (
+                        <span className="font-medium text-emerald-800">{lead.phone}</span>
+                      )}
                     </p>
 
                     {lead.message && (
