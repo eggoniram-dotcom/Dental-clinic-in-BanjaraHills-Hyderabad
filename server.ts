@@ -6,17 +6,23 @@ import { processPatientMessage } from './server/clinicEngine.ts';
 import {
   addTicketReply,
   appendSessionMessage,
+  clearDemoLeads,
+  createLead,
+  getAllLeads,
   getAllTickets,
   getClinicData,
   getSessionMessages,
   resetClinicData,
+  seedDemoLeads,
   updateClinicData,
+  updateLead,
   updateTicketStatus,
 } from './server/store.ts';
-import type { ClinicData, TicketStatus } from './server/types.ts';
+import type { ClinicData, LeadStatus, TicketStatus } from './server/types.ts';
 
 const PORT = 3000;
 const VALID_STATUSES: TicketStatus[] = ['answered', 'needs human', 'urgent', 'closed'];
+const VALID_LEAD_STATUSES: LeadStatus[] = ['New', 'Contacted', 'Appointment', 'Converted'];
 
 async function startServer(): Promise<void> {
   const app = express();
@@ -159,6 +165,77 @@ async function startServer(): Promise<void> {
       return;
     }
     res.json({ ticket: updated });
+  });
+
+  // Lead management endpoints (V2/V3 Lead Dashboard)
+  app.get('/api/leads', (_req, res) => {
+    res.json({ leads: getAllLeads() });
+  });
+
+  app.post('/api/leads', (req, res) => {
+    const body = req.body as {
+      patientName?: string;
+      phone?: string;
+      treatment?: string;
+      preferredDate?: string;
+      preferredTime?: string;
+      message?: string;
+      source?: 'appointment-form' | 'treatment-page' | 'chat-booking';
+    };
+
+    if (
+      !body?.patientName?.trim() ||
+      !body?.phone?.trim() ||
+      !body?.treatment?.trim() ||
+      !body?.preferredDate?.trim()
+    ) {
+      res.status(400).json({
+        error: 'Patient name, mobile number, treatment, and preferred date are required.',
+      });
+      return;
+    }
+
+    const created = createLead({
+      patientName: body.patientName,
+      phone: body.phone,
+      treatment: body.treatment,
+      preferredDate: body.preferredDate,
+      preferredTime: body.preferredTime,
+      message: body.message,
+      source: body.source || 'appointment-form',
+    });
+
+    res.status(201).json(created);
+  });
+
+  app.patch('/api/leads/:id', (req, res) => {
+    const leadId = req.params.id;
+    const body = req.body as {
+      status?: LeadStatus;
+      followUpNote?: string;
+      followUpDate?: string;
+      reminderSentAt?: string;
+    };
+
+    if (body.status && !VALID_LEAD_STATUSES.includes(body.status)) {
+      res.status(400).json({ error: 'Invalid lead status.' });
+      return;
+    }
+
+    const updated = updateLead(leadId, body);
+    if (!updated) {
+      res.status(404).json({ error: 'Lead not found.' });
+      return;
+    }
+    res.json({ lead: updated });
+  });
+
+  app.post('/api/leads/seed-demo', (_req, res) => {
+    res.json({ leads: seedDemoLeads() });
+  });
+
+  app.delete('/api/leads/demo', (_req, res) => {
+    res.json({ leads: clearDemoLeads() });
   });
 
   const isProd = process.env.NODE_ENV === 'production';

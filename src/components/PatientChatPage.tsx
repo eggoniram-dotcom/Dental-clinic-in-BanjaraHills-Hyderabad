@@ -1,22 +1,38 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ArrowRight,
+  Calendar,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
   Clock,
+  ExternalLink,
   MapPin,
+  MessageCircle,
+  Navigation,
   Phone,
   Send,
   ShieldCheck,
   Stethoscope,
+  X,
 } from 'lucide-react';
 import { apiGetSessionMessages, apiSendChatMessage } from '../lib/clinicApi.ts';
+import {
+  CLINIC_IMAGES,
+  TREATMENT_PAGES,
+  buildGoogleMapsDirectionsLink,
+  buildWhatsAppLink,
+  getDoctorEnrichment,
+  resolveTreatmentService,
+} from '../lib/clinicCatalog.ts';
 import type { ChatMessage, ClinicData } from '../types.ts';
+import { AppointmentEnquiryForm } from './AppointmentEnquiryForm.tsx';
 
 interface PatientChatPageProps {
   clinicData: ClinicData;
+  onNavigateStaff?: () => void;
+  onSelectTreatment?: (slug: string) => void;
 }
-
-const RECEPTION_IMAGE_PATH = '/src/assets/images/dental_clinic_reception_1794933076108.jpg';
 
 const QUICK_REPLIES = [
   { label: 'Clinic timings', prompt: 'What are your clinic timings?' },
@@ -28,6 +44,40 @@ const QUICK_REPLIES = [
   { label: 'हिन्दी (समय)', prompt: 'क्लिनिक का समय और कंसल्टेशन फीस क्या है?' },
   { label: 'తెలుగు (వేళలు)', prompt: 'క్లినిక్ వేళలు మరియు ధరలు చెప్పండి' },
 ];
+
+const BOOKING_DAYS = [
+  'Today',
+  'Tomorrow',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+];
+const BOOKING_TIMES = ['10:00 AM', '11:30 AM', '12:30 PM', '3:00 PM', '4:30 PM', '6:00 PM', '7:00 PM'];
+
+interface ConsentFeedbackItem {
+  id: string;
+  name: string;
+  visitType: string;
+  comment: string;
+  submittedAt: string;
+}
+
+const LS_FEEDBACK_KEY = 'dentistae_patient_feedback_v1';
+
+function loadConsentFeedback(): ConsentFeedbackItem[] {
+  try {
+    const raw = localStorage.getItem(LS_FEEDBACK_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as ConsentFeedbackItem[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 function getInitialSessionId(hasAutoQuery: boolean): string {
   if (hasAutoQuery) {
@@ -50,7 +100,11 @@ function getInitialSessionId(hasAutoQuery: boolean): string {
   }
 }
 
-export function PatientChatPage({ clinicData }: PatientChatPageProps) {
+export function PatientChatPage({
+  clinicData,
+  onNavigateStaff,
+  onSelectTreatment,
+}: PatientChatPageProps) {
   const initialQuery =
     typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search).get('q')?.trim() || ''
@@ -64,18 +118,45 @@ export function PatientChatPage({ clinicData }: PatientChatPageProps) {
   const [isSending, setIsSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
-  const [imgError, setImgError] = useState(false);
+
+  // Zero-Broken-Image fallback state map
+  const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
+  const markImageBroken = (key: string) =>
+    setBrokenImages((prev) => ({ ...prev, [key]: true }));
+
+  // Interactive inline chat booking drawer
+  const [bookingDrawerOpen, setBookingDrawerOpen] = useState(false);
+  const [selectedDay, setSelectedDay] = useState('Tomorrow');
+  const [selectedTime, setSelectedTime] = useState('4:30 PM');
+  const [selectedDoctor, setSelectedDoctor] = useState('');
+  const [preselectedTreatment, setPreselectedTreatment] = useState<string | undefined>(undefined);
+
+  // Verified patient feedback with explicit consent (never fabricated)
+  const [feedbackItems, setFeedbackItems] = useState<ConsentFeedbackItem[]>(() =>
+    typeof window !== 'undefined' ? loadConsentFeedback() : [],
+  );
+  const [fbName, setFbName] = useState('');
+  const [fbVisitType, setFbVisitType] = useState('Consultation & Oral Check-up');
+  const [fbComment, setFbComment] = useState('');
+  const [fbConsent, setFbConsent] = useState(false);
+  const [fbNotice, setFbNotice] = useState<string | null>(null);
 
   const autoAskedRef = useRef(false);
+  const chatSectionRef = useRef<HTMLElement | null>(null);
+  const bookingSectionRef = useRef<HTMLElement | null>(null);
+  const chatInputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const hasInteractedRef = useRef(false);
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollMessagesToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, []);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isSending, scrollToBottom]);
+    if (hasInteractedRef.current || messages.length > 0) {
+      scrollMessagesToBottom();
+    }
+  }, [messages, isSending, scrollMessagesToBottom]);
 
   // Poll active session so staff replies from /staff appear live
   useEffect(() => {
@@ -121,6 +202,7 @@ export function PatientChatPage({ clinicData }: PatientChatPageProps) {
       const trimmed = textToSend.trim();
       if (!trimmed || isSending) return;
 
+      hasInteractedRef.current = true;
       setErrorMsg(null);
       setIsSending(true);
       setInputValue('');
@@ -155,10 +237,11 @@ export function PatientChatPage({ clinicData }: PatientChatPageProps) {
     [isSending, sessionId],
   );
 
-  // Ask on load when ?q=... is present
+  // Ask on load when ?q=... is present and scroll chat into view
   useEffect(() => {
     if (initialQuery && !autoAskedRef.current) {
       autoAskedRef.current = true;
+      chatSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       void sendMessage(initialQuery);
     }
   }, [initialQuery, sendMessage]);
@@ -170,257 +253,1108 @@ export function PatientChatPage({ clinicData }: PatientChatPageProps) {
     setErrorMsg(null);
   };
 
+  const openChatBookingFlow = (doctorName?: string) => {
+    if (doctorName) {
+      setSelectedDoctor(doctorName);
+    }
+    setBookingDrawerOpen(true);
+    chatSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    window.setTimeout(() => {
+      chatInputRef.current?.focus({ preventScroll: true });
+    }, 350);
+  };
+
+  const scrollToAppointmentForm = (treatmentName?: string) => {
+    if (treatmentName) {
+      setPreselectedTreatment(treatmentName);
+    }
+    bookingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handleConfirmSlotBooking = (e: React.FormEvent) => {
+    e.preventDefault();
+    const doctorPart = selectedDoctor ? ` with ${selectedDoctor}` : '';
+    const prompt = `I would like to book an appointment ${selectedDay} at ${selectedTime}${doctorPart}.`;
+    setBookingDrawerOpen(false);
+    void sendMessage(prompt);
+  };
+
+  const handleFeedbackSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFbNotice(null);
+    if (!fbName.trim() || fbComment.trim().length < 8) {
+      setFbNotice('Please enter your name and a brief visit note.');
+      return;
+    }
+    if (!fbConsent) {
+      setFbNotice('Please tick the consent box before publishing your feedback.');
+      return;
+    }
+    const next: ConsentFeedbackItem = {
+      id: `fb-${Date.now()}`,
+      name: fbName.trim(),
+      visitType: fbVisitType,
+      comment: fbComment.trim(),
+      submittedAt: new Date().toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      }),
+    };
+    const updated = [next, ...feedbackItems];
+    setFeedbackItems(updated);
+    try {
+      localStorage.setItem(LS_FEEDBACK_KEY, JSON.stringify(updated));
+    } catch {
+      // Ignore storage quota errors
+    }
+    setFbName('');
+    setFbComment('');
+    setFbConsent(false);
+    setFbNotice('Thank you! Your consented patient feedback has been recorded.');
+  };
+
+  const consultService = clinicData.services.find((s) =>
+    s.name.toLowerCase().includes('consult'),
+  );
+  const consultFee = consultService?.price || '₹500';
+  const whatsAppHref = buildWhatsAppLink(clinicData);
+  const mapsDirectionsHref = buildGoogleMapsDirectionsLink(clinicData);
+
   return (
-    <main className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-6">
-      <div className="grid grid-cols-1 lg:grid-cols-[350px_1fr] gap-6 items-stretch">
-        {/* Desktop Clinic Sidebar */}
-        <aside className="hidden lg:flex flex-col bg-white border border-emerald-950/10 rounded-2xl overflow-hidden">
-          <div className="relative h-44 bg-emerald-950/5 overflow-hidden">
-            {!imgError ? (
-              <img
-                src={RECEPTION_IMAGE_PATH}
-                alt="Dentistae Dental Care reception lounge in Banjara Hills"
-                referrerPolicy="no-referrer"
-                onError={() => setImgError(true)}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-emerald-50 to-stone-100 text-emerald-900 p-4">
-                <Stethoscope className="w-8 h-8 mb-2 opacity-75" aria-hidden="true" />
-                <span className="text-sm font-semibold">{clinicData.clinicName}</span>
-              </div>
-            )}
-          </div>
-
-          <div className="p-5 flex-1 flex flex-col gap-5">
-            <div>
-              <h1 className="text-xl font-bold text-emerald-950 tracking-tight">
-                {clinicData.clinicName}
-              </h1>
-              <p className="text-sm text-slate-600 mt-1">{clinicData.tagline}</p>
-            </div>
-
-            <div className="space-y-3 text-sm text-slate-700 border-t border-slate-100 pt-4">
-              <div className="flex items-start gap-2.5">
-                <MapPin className="w-4 h-4 text-emerald-800 shrink-0 mt-0.5" aria-hidden="true" />
-                <div>
-                  <p className="font-medium text-slate-900">Banjara Hills Clinic</p>
-                  <p className="text-xs text-slate-600 leading-relaxed mt-0.5">
-                    {clinicData.address}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2.5">
-                <Clock className="w-4 h-4 text-emerald-800 shrink-0 mt-0.5" aria-hidden="true" />
-                <div>
-                  <p className="font-medium text-slate-900">Clinic Hours</p>
-                  <p className="text-xs text-slate-600 mt-0.5">{clinicData.timings?.weekdays}</p>
-                  <p className="text-xs text-slate-600">{clinicData.timings?.sunday}</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2.5">
-                <Phone className="w-4 h-4 text-emerald-800 shrink-0 mt-0.5" aria-hidden="true" />
-                <div>
-                  <p className="font-medium text-slate-900">Front Desk & Emergency</p>
-                  <p className="text-xs text-slate-600 mt-0.5 tabular-nums">
-                    Desk: {clinicData.phone}
-                  </p>
-                  <p className="text-xs font-medium text-rose-700 tabular-nums">
-                    24/7 Emergency: {clinicData.emergencyPhone}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-slate-100 pt-4 mt-auto">
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
-                <span>Verified clinic file answers · English, हिन्दी & తెలుగు</span>
-              </div>
-            </div>
-          </div>
-        </aside>
-
-        {/* Primary Patient Chat Workspace */}
-        <section
-          aria-label="Patient reception chat"
-          className="flex flex-col bg-white border border-emerald-950/10 rounded-2xl overflow-hidden h-[calc(100dvh-5.25rem)] lg:h-[680px]"
-        >
-          {/* Chat Header */}
-          <div className="px-4 sm:px-5 py-3 border-b border-slate-100 flex items-center justify-between gap-3 shrink-0">
-            <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-emerald-950 truncate">
-                Front Desk Reception
-              </h2>
-              <p className="text-xs text-slate-500 truncate">
-                Road No. 12, Banjara Hills · English, हिन्दी, తెలుగు
+    <div className="bg-[#f8faf9] text-slate-900">
+      {/* ============================================================
+          SECTION 1: HERO — Professional Clinic Photograph, Headline,
+          Book Appointment & WhatsApp Buttons, Trust Indicators
+         ============================================================ */}
+      <section className="border-b border-emerald-950/10 bg-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-8 pb-8 sm:pt-12 sm:pb-12">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-stretch">
+            <div className="lg:col-span-6 flex flex-col justify-center">
+              <p className="text-xs sm:text-sm font-medium text-emerald-800 tracking-wide">
+                Road No. 12, Banjara Hills · Hyderabad
               </p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {messages.length > 0 && (
+
+              <h1
+                className="mt-3 font-bold tracking-tight text-emerald-950 leading-[1.08]"
+                style={{
+                  fontSize: 'clamp(2.15rem, 4vw, 3.45rem)',
+                  textWrap: 'balance',
+                }}
+              >
+                Your Trusted Dental Care in Banjara Hills
+              </h1>
+
+              <p className="mt-4 text-base text-slate-600 leading-relaxed max-w-[54ch]">
+                Personalised dental care in Banjara Hills—combining MDS specialists in root canals,
+                dental implants, and orthodontics with published clinic tariffs, Class-B autoclave
+                sterilisation, and instant front-desk support in English, हिन्दी, and తెలుగు.
+              </p>
+
+              <div className="mt-7 flex flex-wrap items-center gap-3">
                 <button
                   type="button"
-                  onClick={handleResetChat}
-                  className="px-3 py-1.5 min-h-[40px] text-xs font-medium text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg transition-colors whitespace-nowrap shrink-0"
+                  onClick={() => scrollToAppointmentForm()}
+                  className="inline-flex items-center justify-center gap-2 min-h-[46px] px-6 py-3 rounded-xl bg-emerald-900 text-white text-sm font-semibold hover:bg-emerald-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                 >
-                  New Chat
+                  <Calendar className="w-4 h-4" aria-hidden="true" />
+                  <span>Book Appointment</span>
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setMobileInfoOpen((prev) => !prev)}
-                aria-expanded={mobileInfoOpen}
-                className="lg:hidden inline-flex items-center gap-1 px-3 py-1.5 min-h-[40px] text-xs font-medium text-emerald-900 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors whitespace-nowrap shrink-0"
-              >
-                <span>Clinic Info</span>
-                {mobileInfoOpen ? (
-                  <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
+
+                <a
+                  href={whatsAppHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 min-h-[46px] px-5 py-3 rounded-xl border border-emerald-900/20 bg-white text-emerald-950 text-sm font-semibold hover:bg-emerald-50 hover:border-emerald-900/35 transition-colors whitespace-nowrap shrink-0"
+                >
+                  <MessageCircle className="w-4 h-4 text-emerald-700" aria-hidden="true" />
+                  <span>WhatsApp Us</span>
+                </a>
+              </div>
+
+              <div className="mt-6 pt-5 border-t border-slate-100 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-500">
+                <span className="tabular-nums">{clinicData.timings?.weekdays}</span>
+                <span aria-hidden="true">·</span>
+                <a
+                  href={`tel:${clinicData.phone.replace(/\s+/g, '')}`}
+                  className="tabular-nums hover:text-emerald-900 underline-offset-2 hover:underline"
+                >
+                  Front Desk: {clinicData.phone}
+                </a>
+                <span aria-hidden="true">·</span>
+                <span>Walk-ins welcome for urgent pain</span>
+              </div>
+            </div>
+
+            <div className="lg:col-span-6">
+              <div className="relative h-full min-h-[250px] sm:min-h-[340px] lg:min-h-[410px] rounded-2xl overflow-hidden border border-emerald-950/10 bg-emerald-950/5">
+                {!brokenImages.heroSuite ? (
+                  <img
+                    src={CLINIC_IMAGES.heroSuite}
+                    alt="Sunlit modern dental treatment suite at Dentistae Dental Care in Banjara Hills, Hyderabad"
+                    referrerPolicy="no-referrer"
+                    onError={() => markImageBroken('heroSuite')}
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
-                  <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+                  <div className="w-full h-full min-h-[260px] flex flex-col items-center justify-center bg-gradient-to-br from-emerald-50 to-stone-100 text-emerald-900 p-6 text-center">
+                    <Stethoscope className="w-10 h-10 mb-3 opacity-75" aria-hidden="true" />
+                    <p className="text-base font-semibold">{clinicData.clinicName}</p>
+                    <p className="text-xs text-slate-600 mt-1">{clinicData.address}</p>
+                  </div>
                 )}
-              </button>
+
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-5 pt-10 pb-4">
+                  <p className="text-xs sm:text-sm font-medium text-white">
+                    {clinicData.clinicName} · Plot 42, Road No. 12
+                  </p>
+                  <p className="text-xs text-white/80 mt-0.5">{clinicData.landmark}</p>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Mobile Collapsible Clinic Info Drawer */}
-          {mobileInfoOpen && (
-            <div className="lg:hidden px-4 py-3 bg-emerald-50/60 border-b border-emerald-950/10 text-xs text-slate-700 space-y-1.5 shrink-0">
-              <p className="font-semibold text-emerald-950">{clinicData.clinicName}</p>
-              <p>{clinicData.address}</p>
-              <p>{clinicData.timings?.weekdays} · {clinicData.timings?.sunday}</p>
-              <p className="tabular-nums">
-                Desk: {clinicData.phone} · Emergency: {clinicData.emergencyPhone}
+          {/* 4-Column Trust Indicators Strip */}
+          <div
+            aria-label="Why choose our clinic"
+            className="mt-8 sm:mt-10 pt-6 border-t border-emerald-950/10 grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5"
+          >
+            <div>
+              <p className="text-lg sm:text-xl font-bold text-emerald-950 tabular-nums">
+                {clinicData.doctors.length} MDS &amp; BDS Specialists
               </p>
-            </div>
-          )}
-
-          {/* Scrollable Message Stream */}
-          <div className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 space-y-4 bg-stone-50/40">
-            {/* Welcome Card (intentionally does NOT use .bot-msg so .bot-msg is strictly answers) */}
-            <div className="bg-white border border-slate-200/80 rounded-xl p-4 text-sm text-slate-700">
-              <p className="font-semibold text-emerald-950">
-                Welcome to {clinicData.clinicName}
-              </p>
-              <p className="mt-1 text-slate-600 leading-relaxed">
-                Ask about clinic timings, doctors, treatment prices, insurance reimbursement, or
-                request an appointment. Questions outside our clinic file are routed to our human
-                front desk for a callback within 2 working hours.
+              <p className="mt-1 text-xs sm:text-sm text-slate-600 leading-snug">
+                Experienced dentists in endodontics, oral surgery, orthodontics &amp; preventive care
               </p>
             </div>
 
-            {messages.map((msg) => {
-              if (msg.sender === 'patient') {
-                return (
-                  <div key={msg.id} className="flex justify-end">
-                    <div className="max-w-[85%] sm:max-w-[75%] rounded-2xl rounded-br-sm bg-emerald-900 text-white px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words">
-                      {msg.text}
+            <div>
+              <p className="text-lg sm:text-xl font-bold text-emerald-950">
+                Class-B Autoclave
+              </p>
+              <p className="mt-1 text-xs sm:text-sm text-slate-600 leading-snug">
+                Modern digital RVG X-rays, 3D intraoral scanning &amp; hospital-grade sterilisation
+              </p>
+            </div>
+
+            <div>
+              <p className="text-lg sm:text-xl font-bold text-emerald-950 tabular-nums">
+                Consultation {consultFee}
+              </p>
+              <p className="mt-1 text-xs sm:text-sm text-slate-600 leading-snug">
+                Published clinic tariffs · Itemised GST bills for OPD reimbursement claims
+              </p>
+            </div>
+
+            <div>
+              <p className="text-lg sm:text-xl font-bold text-emerald-950">
+                Ground-Floor &amp; Valet
+              </p>
+              <p className="mt-1 text-xs sm:text-sm text-slate-600 leading-snug">
+                Step-free wheelchair access · Complimentary Road No. 12 valet parking
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============================================================
+          SECTION 2: OUR DENTAL TREATMENTS (6 Individual Treatment Pages)
+         ============================================================ */}
+      <section
+        id="treatments"
+        aria-label="Our dental treatments"
+        className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 scroll-mt-16"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div className="max-w-2xl">
+            <p className="text-xs sm:text-sm font-medium text-emerald-800">
+              Individual Treatment Guides · Transparent Clinic Tariffs
+            </p>
+            <h2
+              className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-emerald-950"
+              style={{ textWrap: 'balance' }}
+            >
+              Our Dental Treatments in Banjara Hills
+            </h2>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-600 max-w-md">
+            Explore visit steps, FAQs, and live clinic fees for each treatment, or message our
+            front desk directly on WhatsApp.
+          </p>
+        </div>
+
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {TREATMENT_PAGES.map((item, index) => {
+            const matchedService = resolveTreatmentService(item, clinicData);
+            const livePrice = matchedService?.price;
+            const waTreatmentHref = buildWhatsAppLink(
+              clinicData,
+              `Hello ${clinicData.clinicName}, I would like to enquire about ${item.title}.`,
+            );
+
+            return (
+              <article
+                key={item.slug}
+                className="flex flex-col justify-between rounded-2xl bg-white border border-emerald-950/10 p-5 sm:p-6 hover:border-emerald-900/25 transition-colors"
+              >
+                <div>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-xs font-mono text-slate-500 tabular-nums">
+                      {String(index + 1).padStart(2, '0')}.
+                    </span>
+                    {livePrice && (
+                      <span className="text-sm font-bold text-emerald-900 tabular-nums">
+                        {livePrice}
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 className="mt-2 text-lg font-bold text-emerald-950 tracking-tight">
+                    {item.title}
+                  </h3>
+                  <p className="mt-2 text-sm text-slate-600 leading-relaxed">{item.summary}</p>
+                </div>
+
+                <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onSelectTreatment?.(item.slug)}
+                    className="inline-flex items-center gap-1.5 min-h-[40px] text-xs sm:text-sm font-semibold text-emerald-900 hover:text-emerald-700 transition-colors whitespace-nowrap cursor-pointer"
+                  >
+                    <span>Treatment Details</span>
+                    <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                  </button>
+
+                  <a
+                    href={waTreatmentHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 min-h-[40px] px-3 py-1.5 rounded-lg border border-emerald-950/15 bg-emerald-50/60 text-xs font-semibold text-emerald-950 hover:bg-emerald-100 transition-colors whitespace-nowrap"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" />
+                    <span>WhatsApp</span>
+                  </a>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ============================================================
+          SECTION 3: LIVE FRONT DESK AI RECEPTIONIST CHAT
+          (Preserves #chat-input, #chat-send, .bot-msg, ?q=, Quick Replies)
+         ============================================================ */}
+      <section
+        id="front-desk-chat"
+        ref={chatSectionRef}
+        aria-label="Front desk chat and clinic quick reference"
+        className="border-y border-emerald-950/10 bg-white scroll-mt-16"
+      >
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 py-10 sm:py-14">
+          <div className="mb-5 flex flex-col sm:flex-row sm:items-end justify-between gap-2 px-1">
+            <div>
+              <p className="text-xs font-medium text-emerald-800">
+                Instant Front Desk · English, हिन्दी &amp; తెలుగు
+              </p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-emerald-950 tracking-tight mt-0.5">
+                Ask Our AI Receptionist or Request a Slot
+              </h2>
+            </div>
+            <p className="text-xs sm:text-sm text-slate-600 max-w-md">
+              Answers strictly from our live clinic file; medical questions and custom enquiries
+              route directly to our human front desk for a callback within 2 working hours.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6 items-stretch">
+            {/* Desktop Clinic Quick-Reference Sidebar */}
+            <aside className="hidden lg:flex flex-col bg-[#f8faf9] border border-emerald-950/10 rounded-2xl overflow-hidden">
+              <div className="relative h-40 bg-emerald-950/5 overflow-hidden">
+                {!brokenImages.receptionSidebar ? (
+                  <img
+                    src={CLINIC_IMAGES.reception}
+                    alt="Dentistae Dental Care reception lounge in Banjara Hills"
+                    referrerPolicy="no-referrer"
+                    onError={() => markImageBroken('receptionSidebar')}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-emerald-50 to-stone-100 text-emerald-900 p-4">
+                    <Stethoscope className="w-8 h-8 mb-2 opacity-75" aria-hidden="true" />
+                    <span className="text-sm font-semibold">{clinicData.clinicName}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-5 flex-1 flex flex-col gap-5">
+                <div>
+                  <h3 className="text-lg font-bold text-emerald-950 tracking-tight">
+                    {clinicData.clinicName}
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-1">{clinicData.tagline}</p>
+                </div>
+
+                <div className="space-y-3.5 text-sm text-slate-700 border-t border-emerald-950/10 pt-4">
+                  <div className="flex items-start gap-2.5">
+                    <MapPin
+                      className="w-4 h-4 text-emerald-800 shrink-0 mt-0.5"
+                      aria-hidden="true"
+                    />
+                    <div>
+                      <p className="font-medium text-slate-900">Banjara Hills Clinic</p>
+                      <p className="text-xs text-slate-600 leading-relaxed mt-0.5">
+                        {clinicData.address}
+                      </p>
                     </div>
                   </div>
-                );
-              }
 
-              const isStaff = msg.sender === 'staff';
-              return (
-                <div key={msg.id} className="flex justify-start">
-                  <div
-                    className={`bot-msg max-w-[90%] sm:max-w-[80%] rounded-2xl rounded-bl-sm px-4 py-3 text-sm leading-relaxed border break-words ${
-                      isStaff
-                        ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
-                        : 'bg-white border-slate-200 text-slate-800'
-                    }`}
-                  >
-                    {isStaff && (
-                      <p className="text-xs font-semibold text-emerald-900 mb-1">
-                        Front Desk Staff
+                  <div className="flex items-start gap-2.5">
+                    <Clock
+                      className="w-4 h-4 text-emerald-800 shrink-0 mt-0.5"
+                      aria-hidden="true"
+                    />
+                    <div>
+                      <p className="font-medium text-slate-900">Clinic Hours</p>
+                      <p className="text-xs text-slate-600 mt-0.5 tabular-nums">
+                        {clinicData.timings?.weekdays}
                       </p>
-                    )}
-                    <div className="whitespace-pre-wrap">{msg.text}</div>
-                    {msg.fallbackUsed && (
-                      <p className="mt-2 pt-1.5 border-t border-slate-100 text-[11px] text-slate-500">
-                        Answered from the clinic file
+                      <p className="text-xs text-slate-600 tabular-nums">
+                        {clinicData.timings?.sunday}
                       </p>
-                    )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
+                    <Phone
+                      className="w-4 h-4 text-emerald-800 shrink-0 mt-0.5"
+                      aria-hidden="true"
+                    />
+                    <div>
+                      <p className="font-medium text-slate-900">Front Desk &amp; Emergency</p>
+                      <p className="text-xs text-slate-600 mt-0.5 tabular-nums">
+                        Desk: {clinicData.phone}
+                      </p>
+                      <p className="text-xs font-medium text-rose-700 tabular-nums">
+                        24/7 Emergency: {clinicData.emergencyPhone}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              );
-            })}
 
-            {isSending && (
-              <div className="flex justify-start">
-                <div
-                  aria-live="polite"
-                  className="rounded-2xl rounded-bl-sm bg-white border border-slate-200 px-4 py-2.5 text-xs text-slate-500"
-                >
-                  Checking clinic records...
+                <div className="border-t border-emerald-950/10 pt-4 mt-auto space-y-2.5">
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
+                    <span>Verified clinic file answers · No invented fees</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openChatBookingFlow()}
+                    className="w-full inline-flex items-center justify-center gap-1.5 min-h-[40px] px-4 py-2 rounded-lg border border-emerald-900/20 bg-white text-xs font-semibold text-emerald-950 hover:bg-emerald-50 transition-colors cursor-pointer"
+                  >
+                    <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Quick Slot Selector</span>
+                  </button>
                 </div>
               </div>
-            )}
+            </aside>
 
-            {errorMsg && (
-              <div
-                role="alert"
-                className="rounded-xl bg-rose-50 border border-rose-200 px-4 py-2.5 text-xs text-rose-800"
-              >
-                {errorMsg}
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Quick-Reply Bar */}
-          <div className="px-3 sm:px-5 pt-2.5 pb-1.5 border-t border-slate-100 bg-white shrink-0">
+            {/* Primary Patient Chat Workspace */}
             <div
-              aria-label="Quick questions"
-              className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar"
+              aria-label="Patient reception chat"
+              className="flex flex-col bg-white border border-emerald-950/10 rounded-2xl overflow-hidden h-[560px] sm:h-[620px]"
             >
-              {QUICK_REPLIES.map((qr) => (
-                <button
-                  key={qr.label}
-                  type="button"
-                  data-quick-reply={qr.label}
-                  disabled={isSending}
-                  onClick={() => void sendMessage(qr.prompt)}
-                  className="px-3 py-2 min-h-[40px] rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 text-xs font-medium text-slate-700 hover:text-emerald-950 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50"
+              {/* Chat Header */}
+              <div className="px-4 sm:px-5 py-3 border-b border-slate-100 flex items-center justify-between gap-3 shrink-0">
+                <div className="min-w-0">
+                  <h3 className="text-base font-semibold text-emerald-950 truncate">
+                    Front Desk Reception
+                  </h3>
+                  <p className="text-xs text-slate-500 truncate">
+                    Timings, doctors, tariffs, insurance &amp; appointment slots
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setBookingDrawerOpen((prev) => !prev)}
+                    className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[40px] text-xs font-medium text-emerald-900 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  >
+                    <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Book Slot</span>
+                  </button>
+                  {messages.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleResetChat}
+                      className="px-3 py-1.5 min-h-[40px] text-xs font-medium text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                    >
+                      New Chat
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setMobileInfoOpen((prev) => !prev)}
+                    aria-expanded={mobileInfoOpen}
+                    className="lg:hidden inline-flex items-center gap-1 px-3 py-1.5 min-h-[40px] text-xs font-medium text-emerald-900 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  >
+                    <span>Clinic Info</span>
+                    {mobileInfoOpen ? (
+                      <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Mobile Collapsible Clinic Info Drawer */}
+              {mobileInfoOpen && (
+                <div className="lg:hidden px-4 py-3 bg-emerald-50/60 border-b border-emerald-950/10 text-xs text-slate-700 space-y-1.5 shrink-0">
+                  <p className="font-semibold text-emerald-950">{clinicData.clinicName}</p>
+                  <p>{clinicData.address}</p>
+                  <p className="tabular-nums">
+                    {clinicData.timings?.weekdays} · {clinicData.timings?.sunday}
+                  </p>
+                  <p className="tabular-nums">
+                    Desk: {clinicData.phone} · Emergency: {clinicData.emergencyPhone}
+                  </p>
+                </div>
+              )}
+
+              {/* Inline Quick Slot Booking Bar */}
+              {bookingDrawerOpen && (
+                <form
+                  onSubmit={handleConfirmSlotBooking}
+                  className="px-4 sm:px-5 py-3 bg-emerald-50/70 border-b border-emerald-950/10 shrink-0"
                 >
-                  {qr.label}
+                  <div className="flex items-center justify-between gap-2 mb-2.5">
+                    <p className="text-xs font-semibold text-emerald-950">
+                      Request an Appointment Slot in Chat
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setBookingDrawerOpen(false)}
+                      aria-label="Close slot selector"
+                      className="p-1 text-slate-500 hover:text-slate-900 rounded cursor-pointer"
+                    >
+                      <X className="w-4 h-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                    <select
+                      aria-label="Preferred day"
+                      value={selectedDay}
+                      onChange={(e) => setSelectedDay(e.target.value)}
+                      className="h-10 px-2.5 rounded-lg border border-emerald-950/15 bg-white text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-700"
+                    >
+                      {BOOKING_DAYS.map((day) => (
+                        <option key={day} value={day}>
+                          {day}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      aria-label="Preferred time"
+                      value={selectedTime}
+                      onChange={(e) => setSelectedTime(e.target.value)}
+                      className="h-10 px-2.5 rounded-lg border border-emerald-950/15 bg-white text-xs text-slate-800 tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-700"
+                    >
+                      {BOOKING_TIMES.map((time) => (
+                        <option key={time} value={time}>
+                          {time}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      aria-label="Preferred doctor"
+                      value={selectedDoctor}
+                      onChange={(e) => setSelectedDoctor(e.target.value)}
+                      className="h-10 px-2.5 rounded-lg border border-emerald-950/15 bg-white text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-700"
+                    >
+                      <option value="">Any Available Dentist</option>
+                      {clinicData.doctors.map((doc) => (
+                        <option key={doc.id} value={doc.name}>
+                          {doc.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="submit"
+                      disabled={isSending}
+                      className="h-10 px-3 rounded-lg bg-emerald-900 text-white text-xs font-semibold hover:bg-emerald-800 transition-colors whitespace-nowrap disabled:opacity-50 cursor-pointer"
+                    >
+                      Confirm Request
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Scrollable Message Stream */}
+              <div className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 space-y-4 bg-stone-50/40">
+                {/* Welcome Card (does NOT use .bot-msg so .bot-msg is strictly actual answers) */}
+                <div className="bg-white border border-slate-200/80 rounded-xl p-4 text-sm text-slate-700">
+                  <p className="font-semibold text-emerald-950">
+                    Welcome to {clinicData.clinicName}
+                  </p>
+                  <p className="mt-1 text-slate-600 leading-relaxed">
+                    Ask about clinic timings, doctors, treatment prices, insurance reimbursement, or
+                    request an appointment. Questions outside our clinic file are routed to our
+                    human front desk for a callback within 2 working hours.
+                  </p>
+                </div>
+
+                {messages.map((msg) => {
+                  if (msg.sender === 'patient') {
+                    return (
+                      <div key={msg.id} className="flex justify-end">
+                        <div className="max-w-[85%] sm:max-w-[75%] rounded-2xl rounded-br-sm bg-emerald-900 text-white px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words">
+                          {msg.text}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  const isStaff = msg.sender === 'staff';
+                  return (
+                    <div key={msg.id} className="flex justify-start">
+                      <div
+                        className={`bot-msg max-w-[90%] sm:max-w-[80%] rounded-2xl rounded-bl-sm px-4 py-3 text-sm leading-relaxed border break-words ${
+                          isStaff
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
+                            : 'bg-white border-slate-200 text-slate-800'
+                        }`}
+                      >
+                        {isStaff && (
+                          <p className="text-xs font-semibold text-emerald-900 mb-1">
+                            Front Desk Staff
+                          </p>
+                        )}
+                        <div className="whitespace-pre-wrap">{msg.text}</div>
+                        {msg.fallbackUsed && (
+                          <p className="mt-2 pt-1.5 border-t border-slate-100 text-[11px] text-slate-500">
+                            Answered from the clinic file
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {isSending && (
+                  <div className="flex justify-start">
+                    <div
+                      aria-live="polite"
+                      className="rounded-2xl rounded-bl-sm bg-white border border-slate-200 px-4 py-2.5 text-xs text-slate-500"
+                    >
+                      Checking clinic records...
+                    </div>
+                  </div>
+                )}
+
+                {errorMsg && (
+                  <div
+                    role="alert"
+                    className="rounded-xl bg-rose-50 border border-rose-200 px-4 py-2.5 text-xs text-rose-800"
+                  >
+                    {errorMsg}
+                  </div>
+                )}
+
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Quick-Reply Bar */}
+              <div className="px-3 sm:px-5 pt-2.5 pb-1.5 border-t border-slate-100 bg-white shrink-0">
+                <div
+                  aria-label="Quick questions"
+                  className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar"
+                >
+                  {QUICK_REPLIES.map((qr) => (
+                    <button
+                      key={qr.label}
+                      type="button"
+                      data-quick-reply={qr.label}
+                      disabled={isSending}
+                      onClick={() => void sendMessage(qr.prompt)}
+                      className="px-3 py-2 min-h-[40px] rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 text-xs font-medium text-slate-700 hover:text-emerald-950 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50 cursor-pointer"
+                    >
+                      {qr.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Composer */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void sendMessage(inputValue);
+                }}
+                className="p-3 sm:px-5 sm:py-3.5 bg-white border-t border-slate-100 flex items-center gap-2 shrink-0"
+              >
+                <input
+                  ref={chatInputRef}
+                  id="chat-input"
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  placeholder="Ask about timings, doctors, prices, or book..."
+                  aria-label="Ask the dental clinic front desk"
+                  className="flex-1 min-w-0 h-11 px-3.5 rounded-xl border border-slate-300 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:border-emerald-700"
+                />
+                <button
+                  id="chat-send"
+                  type="submit"
+                  disabled={isSending || !inputValue.trim()}
+                  aria-label="Send message"
+                  className="inline-flex items-center justify-center gap-1.5 h-11 min-w-[44px] px-4 rounded-xl bg-emerald-900 text-white text-sm font-medium hover:bg-emerald-800 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <Send className="w-4 h-4" aria-hidden="true" />
+                  <span className="hidden sm:inline">Send</span>
                 </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============================================================
+          SECTION 4: DOCTOR PROFILES (Photographs, Qualifications,
+          Specialisations & Treatment Philosophy)
+         ============================================================ */}
+      <section
+        id="doctors"
+        aria-label="Doctor profiles and treatment philosophy"
+        className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 scroll-mt-16"
+      >
+        <div className="max-w-2xl">
+          <p className="text-xs sm:text-sm font-medium text-emerald-800">
+            About Our Clinic &amp; Specialists · Banjara Hills
+          </p>
+          <h2
+            className="mt-1.5 text-2xl sm:text-3xl font-bold tracking-tight text-emerald-950"
+            style={{ textWrap: 'balance' }}
+          >
+            Meet the Dentists Behind Your Care
+          </h2>
+          <p className="mt-2.5 text-sm sm:text-base text-slate-600 leading-relaxed">
+            Every treatment plan at {clinicData.clinicName} is led by a dedicated specialist with
+            published qualifications, transparent clinic tariffs, and unhurried chairside guidance.
+          </p>
+        </div>
+
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+          {clinicData.doctors.map((doc, idx) => {
+            const enrichment = getDoctorEnrichment(doc, idx);
+            const imgKey = `doc-${doc.id}`;
+            return (
+              <article
+                key={doc.id}
+                className="rounded-2xl bg-white border border-emerald-950/10 overflow-hidden flex flex-col sm:flex-row"
+              >
+                <div className="sm:w-44 lg:w-48 shrink-0 aspect-[4/3] sm:aspect-auto bg-emerald-950/5 overflow-hidden">
+                  {!brokenImages[imgKey] ? (
+                    <img
+                      src={enrichment.portrait}
+                      alt={`${doc.name}, ${doc.qualification} at ${clinicData.clinicName}`}
+                      referrerPolicy="no-referrer"
+                      onError={() => markImageBroken(imgKey)}
+                      className="w-full h-full object-cover object-top"
+                    />
+                  ) : (
+                    <div className="w-full h-full min-h-[180px] flex flex-col items-center justify-center bg-gradient-to-br from-emerald-50 to-stone-100 text-emerald-900 p-4 text-center">
+                      <Stethoscope className="w-8 h-8 mb-2 opacity-75" aria-hidden="true" />
+                      <span className="text-xs font-semibold">{doc.name}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-5 flex-1 flex flex-col justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-medium text-emerald-800">{doc.qualification}</p>
+                    <h3 className="mt-1 text-lg font-bold text-emerald-950">{doc.name}</h3>
+                    <p className="mt-1 text-sm font-medium text-slate-800">{doc.specialty}</p>
+                    <p className="mt-2.5 text-xs sm:text-sm text-slate-600 leading-relaxed">
+                      {enrichment.philosophy}
+                    </p>
+                    <p className="mt-3 text-xs text-slate-500">
+                      Focus: {enrichment.focusAreas.join(' · ')}
+                    </p>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs text-slate-500 tabular-nums">{doc.schedule}</span>
+                    <button
+                      type="button"
+                      onClick={() => openChatBookingFlow(doc.name)}
+                      className="inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 rounded-lg border border-emerald-950/15 bg-white text-xs font-semibold text-emerald-950 hover:bg-emerald-50 transition-colors whitespace-nowrap cursor-pointer"
+                    >
+                      <span>Request Slot</span>
+                      <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ============================================================
+          SECTION 5: CLINIC GALLERY & CONSENT-BASED PATIENT FEEDBACK
+         ============================================================ */}
+      <section
+        id="gallery-reviews"
+        aria-label="Clinic gallery and patient feedback"
+        className="border-t border-emerald-950/10 bg-white scroll-mt-16"
+      >
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 space-y-12">
+          {/* Clinic Gallery */}
+          <div>
+            <div className="max-w-2xl">
+              <p className="text-xs sm:text-sm font-medium text-emerald-800">
+                Inside Our Road No. 12 Facility
+              </p>
+              <h2 className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-emerald-950">
+                Clinic Environment &amp; Clinical Sterilisation Standards
+              </h2>
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-5">
+              {[
+                {
+                  key: 'gal-suite',
+                  src: CLINIC_IMAGES.heroSuite,
+                  title: 'Sunlit Operatory Suite',
+                  caption:
+                    'Private glass-partitioned treatment suites equipped for micro-endodontics and oral surgery.',
+                },
+                {
+                  key: 'gal-diag',
+                  src: CLINIC_IMAGES.diagnosticsBay,
+                  title: '3D Diagnostics & Class-B Autoclave Bay',
+                  caption:
+                    'Glass-visible sterilisation protocol and 3D intraoral scanning for crowns and clear aligners.',
+                },
+                {
+                  key: 'gal-reception',
+                  src: CLINIC_IMAGES.reception,
+                  title: 'Calm Ground-Floor Reception',
+                  caption:
+                    'Step-free wheelchair entrance with complimentary valet parking on Road No. 12, Banjara Hills.',
+                },
+              ].map((photo) => (
+                <figure
+                  key={photo.key}
+                  className="rounded-2xl overflow-hidden border border-emerald-950/10 bg-[#f8faf9]"
+                >
+                  <div className="aspect-[16/10] bg-emerald-950/5 overflow-hidden">
+                    {!brokenImages[photo.key] ? (
+                      <img
+                        src={photo.src}
+                        alt={photo.title}
+                        referrerPolicy="no-referrer"
+                        onError={() => markImageBroken(photo.key)}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-emerald-900 p-4">
+                        <Stethoscope className="w-8 h-8 opacity-70" aria-hidden="true" />
+                      </div>
+                    )}
+                  </div>
+                  <figcaption className="p-4">
+                    <p className="text-sm font-bold text-emerald-950">{photo.title}</p>
+                    <p className="mt-1 text-xs text-slate-600 leading-relaxed">{photo.caption}</p>
+                  </figcaption>
+                </figure>
               ))}
             </div>
           </div>
 
-          {/* Composer */}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void sendMessage(inputValue);
-            }}
-            className="p-3 sm:px-5 sm:py-3.5 bg-white border-t border-slate-100 flex items-center gap-2 shrink-0"
-          >
-            <input
-              id="chat-input"
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Ask about timings, doctors, prices, or book..."
-              aria-label="Ask the dental clinic front desk"
-              className="flex-1 min-w-0 h-11 px-3.5 rounded-xl border border-slate-300 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:border-emerald-700"
-            />
-            <button
-              id="chat-send"
-              type="submit"
-              disabled={isSending || !inputValue.trim()}
-              aria-label="Send message"
-              className="inline-flex items-center justify-center gap-1.5 h-11 min-w-[44px] px-4 rounded-xl bg-emerald-900 text-white text-sm font-medium hover:bg-emerald-800 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+          {/* Patient Reviews & Consent-First Feedback */}
+          <div className="pt-8 border-t border-emerald-950/10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            <div className="lg:col-span-6 space-y-5">
+              <div>
+                <p className="text-xs font-medium text-emerald-800">
+                  Ethical Patient Reviews &amp; Consent Policy
+                </p>
+                <h3 className="mt-1 text-xl sm:text-2xl font-bold text-emerald-950 tracking-tight">
+                  Verified Patient Feedback &amp; Google Reviews
+                </h3>
+                <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+                  We never publish fabricated reviews or unconsented clinical before-and-after
+                  photographs. Approved clinical case records are reviewed privately during
+                  in-clinic consultations, and verified patient reviews are hosted directly on
+                  Google Maps.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <a
+                  href={mapsDirectionsHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl border border-emerald-950/15 bg-white text-sm font-semibold text-emerald-950 hover:bg-emerald-50 transition-colors whitespace-nowrap"
+                >
+                  <span>View Clinic on Google Maps</span>
+                  <ExternalLink className="w-4 h-4 text-emerald-700" aria-hidden="true" />
+                </a>
+              </div>
+
+              {feedbackItems.length > 0 && (
+                <div className="pt-4 border-t border-slate-100 space-y-3">
+                  <p className="text-xs font-semibold text-slate-500">
+                    Consented Patient Notes Submitted on This Device
+                  </p>
+                  {feedbackItems.map((fb) => (
+                    <div
+                      key={fb.id}
+                      className="rounded-xl bg-[#f8faf9] border border-emerald-950/10 p-4"
+                    >
+                      <p className="text-sm text-slate-700 leading-relaxed">“{fb.comment}”</p>
+                      <p className="mt-2 text-xs text-slate-500">
+                        <span className="font-semibold text-emerald-950">{fb.name}</span> ·{' '}
+                        {fb.visitType} · {fb.submittedAt}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="lg:col-span-6">
+              <form
+                onSubmit={handleFeedbackSubmit}
+                className="rounded-2xl bg-[#f8faf9] border border-emerald-950/10 p-5 sm:p-6 space-y-4"
+              >
+                <div>
+                  <h3 className="text-base font-bold text-emerald-950">
+                    Share Your Visit Feedback (With Consent)
+                  </h3>
+                  <p className="text-xs text-slate-600 mt-1">
+                    Visited our Banjara Hills clinic recently? Leave a note for our care team.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input
+                    type="text"
+                    value={fbName}
+                    onChange={(e) => setFbName(e.target.value)}
+                    placeholder="Your name"
+                    aria-label="Your name for feedback"
+                    className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
+                  />
+                  <select
+                    value={fbVisitType}
+                    onChange={(e) => setFbVisitType(e.target.value)}
+                    aria-label="Visit type"
+                    className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
+                  >
+                    {clinicData.services.map((srv) => (
+                      <option key={srv.id} value={srv.name}>
+                        {srv.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <textarea
+                  rows={3}
+                  value={fbComment}
+                  onChange={(e) => setFbComment(e.target.value)}
+                  placeholder="Share how your consultation or visit went..."
+                  aria-label="Feedback note"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
+                />
+
+                <label className="flex items-start gap-2.5 text-xs text-slate-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={fbConsent}
+                    onChange={(e) => setFbConsent(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
+                  />
+                  <span>
+                    I consent to sharing this feedback with {clinicData.clinicName} and understand
+                    no private clinical details should be included.
+                  </span>
+                </label>
+
+                {fbNotice && (
+                  <p className="text-xs font-medium text-emerald-900 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
+                    <span>{fbNotice}</span>
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center min-h-[42px] px-5 py-2 rounded-xl bg-emerald-900 text-white text-xs sm:text-sm font-semibold hover:bg-emerald-800 transition-colors cursor-pointer"
+                >
+                  Submit Feedback
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============================================================
+          SECTION 6: CONTACT, GOOGLE MAPS DIRECTIONS & APPOINTMENT FORM
+         ============================================================ */}
+      <section
+        id="book-appointment"
+        ref={bookingSectionRef}
+        aria-label="Contact and appointment booking"
+        className="border-t border-emerald-950/10 bg-[#f8faf9] scroll-mt-16"
+      >
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
+          <div className="max-w-2xl mb-8">
+            <p className="text-xs sm:text-sm font-medium text-emerald-800">
+              Visit Banjara Hills · Capture &amp; Track Enquiries
+            </p>
+            <h2
+              className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-emerald-950"
+              style={{ textWrap: 'balance' }}
             >
-              <Send className="w-4 h-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Send</span>
-            </button>
-          </form>
-        </section>
-      </div>
-    </main>
+              Contact &amp; Appointment Booking
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            {/* Appointment Enquiry Form (Wired to Lead Dashboard + Staff Queue) */}
+            <div className="lg:col-span-7">
+              <AppointmentEnquiryForm
+                clinicData={clinicData}
+                initialTreatment={preselectedTreatment}
+                source="appointment-form"
+              />
+            </div>
+
+            {/* Contact, Timings, Emergency & Google Maps Directions Card */}
+            <div className="lg:col-span-5 space-y-5">
+              <div className="rounded-2xl bg-white border border-emerald-950/10 p-6 space-y-5">
+                <div>
+                  <p className="text-xs font-medium text-emerald-800">Location &amp; Directions</p>
+                  <h3 className="mt-1 text-lg font-bold text-emerald-950">
+                    {clinicData.clinicName}
+                  </h3>
+                  <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">
+                    {clinicData.address}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">{clinicData.landmark}</p>
+                  <p className="mt-2 text-xs text-slate-600 leading-relaxed">
+                    {clinicData.parkingAndAccess}
+                  </p>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 space-y-1.5 text-sm text-slate-700 tabular-nums">
+                  <p className="font-semibold text-emerald-950">Clinic Timings</p>
+                  <p>{clinicData.timings?.weekdays}</p>
+                  <p>{clinicData.timings?.sunday}</p>
+                  <p className="text-xs text-slate-500">{clinicData.timings?.lunchBreak}</p>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 space-y-2 text-sm tabular-nums">
+                  <p className="font-semibold text-emerald-950">Direct Phone &amp; Emergency</p>
+                  <p className="text-slate-700">
+                    Front Desk:{' '}
+                    <a
+                      href={`tel:${clinicData.phone.replace(/\s+/g, '')}`}
+                      className="font-semibold text-emerald-900 hover:underline"
+                    >
+                      {clinicData.phone}
+                    </a>
+                  </p>
+                  <p className="text-rose-700 font-semibold">
+                    24/7 Emergency Dental Line:{' '}
+                    <a
+                      href={`tel:${clinicData.emergencyPhone.replace(/\s+/g, '')}`}
+                      className="hover:underline"
+                    >
+                      {clinicData.emergencyPhone}
+                    </a>
+                  </p>
+                  <p className="text-xs text-slate-500">Email: {clinicData.email}</p>
+                </div>
+
+                <div className="pt-2 flex flex-wrap items-center gap-3">
+                  <a
+                    href={mapsDirectionsHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl bg-emerald-900 text-white text-sm font-semibold hover:bg-emerald-800 transition-colors whitespace-nowrap"
+                  >
+                    <Navigation className="w-4 h-4" aria-hidden="true" />
+                    <span>Get Directions</span>
+                  </a>
+                  <a
+                    href={whatsAppHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl border border-emerald-950/15 bg-white text-emerald-950 text-sm font-semibold hover:bg-emerald-50 transition-colors whitespace-nowrap"
+                  >
+                    <MessageCircle className="w-4 h-4 text-emerald-700" aria-hidden="true" />
+                    <span>WhatsApp</span>
+                  </a>
+                </div>
+              </div>
+
+              {/* OPD Insurance & Payment Summary */}
+              <div className="rounded-2xl bg-white border border-emerald-950/10 p-5 text-xs text-slate-600 space-y-2">
+                <p className="text-sm font-bold text-emerald-950">
+                  Insurance Reimbursement &amp; Payments
+                </p>
+                <p className="leading-relaxed">{clinicData.insurance.summary}</p>
+                <p className="text-slate-500">
+                  Supported Corporate OPD Plans: {clinicData.insurance.partners.join(' · ')}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============================================================
+          SECTION 7: QUIET FOOTER
+         ============================================================ */}
+      <footer className="border-t border-emerald-950/10 bg-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-slate-500">
+          <div>
+            <p className="font-semibold text-emerald-950">{clinicData.clinicName}</p>
+            <p className="mt-0.5">
+              Plot 42, Road No. 12, Banjara Hills, Hyderabad · {clinicData.phone}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <a href="#treatments" className="hover:text-emerald-950">
+              Treatments
+            </a>
+            <a href="#doctors" className="hover:text-emerald-950">
+              Doctors
+            </a>
+            <a href="#book-appointment" className="hover:text-emerald-950">
+              Book Appointment
+            </a>
+            <a
+              href="/staff"
+              onClick={(e) => {
+                if (onNavigateStaff) {
+                  e.preventDefault();
+                  onNavigateStaff();
+                }
+              }}
+              className="font-medium text-emerald-900 hover:underline underline-offset-2"
+            >
+              Staff Desk &amp; Lead Dashboard
+            </a>
+          </div>
+        </div>
+      </footer>
+    </div>
   );
 }

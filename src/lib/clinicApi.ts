@@ -2,17 +2,24 @@ import {
   normalizeClinicData,
   type ChatMessage,
   type ClinicData,
+  type LeadEnquiry,
+  type LeadStatus,
   type Ticket,
   type TicketStatus,
 } from '../types.ts';
 import {
   localAddTicketReply,
+  localClearDemoLeads,
+  localCreateLead,
+  localGetAllLeads,
   localGetAllTickets,
   localGetClinicData,
   localGetSessionMessages,
   localHandleChat,
   localResetClinicData,
+  localSeedDemoLeads,
   localUpdateClinicData,
+  localUpdateLead,
   localUpdateTicketStatus,
 } from './localClinicEngine.ts';
 
@@ -207,3 +214,113 @@ export async function apiUpdateTicketStatus(
   }
   return Boolean(localUpdateTicketStatus(ticketId, status));
 }
+
+export async function apiGetLeads(): Promise<LeadEnquiry[]> {
+  const hasBackend = await detectBackendAvailable();
+  if (hasBackend) {
+    try {
+      const res = await fetch('/api/leads');
+      if (await isJsonResponse(res)) {
+        const data = (await res.json()) as { leads?: LeadEnquiry[] };
+        if (Array.isArray(data.leads)) {
+          return data.leads;
+        }
+      }
+    } catch {
+      backendMode = 'static';
+    }
+  }
+  return localGetAllLeads();
+}
+
+export async function apiCreateLead(input: {
+  patientName: string;
+  phone: string;
+  treatment: string;
+  preferredDate: string;
+  preferredTime?: string;
+  message?: string;
+  source?: 'appointment-form' | 'treatment-page' | 'chat-booking';
+}): Promise<{ lead: LeadEnquiry; ticket?: Ticket }> {
+  const hasBackend = await detectBackendAvailable();
+  if (hasBackend) {
+    try {
+      const res = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      if (await isJsonResponse(res)) {
+        return (await res.json()) as { lead: LeadEnquiry; ticket?: Ticket };
+      }
+    } catch {
+      backendMode = 'static';
+    }
+  }
+  return localCreateLead(input);
+}
+
+export async function apiUpdateLead(
+  leadId: string,
+  patch: {
+    status?: LeadStatus;
+    followUpNote?: string;
+    followUpDate?: string;
+    reminderSentAt?: string;
+  },
+): Promise<LeadEnquiry | null> {
+  const hasBackend = await detectBackendAvailable();
+  if (hasBackend) {
+    try {
+      const res = await fetch(`/api/leads/${encodeURIComponent(leadId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (await isJsonResponse(res)) {
+        const data = (await res.json()) as { lead?: LeadEnquiry };
+        return data.lead ?? null;
+      }
+    } catch {
+      backendMode = 'static';
+    }
+  }
+  return localUpdateLead(leadId, patch);
+}
+
+export async function apiSeedDemoLeads(): Promise<LeadEnquiry[]> {
+  const hasBackend = await detectBackendAvailable();
+  if (hasBackend) {
+    try {
+      const res = await fetch('/api/leads/seed-demo', { method: 'POST' });
+      if (await isJsonResponse(res)) {
+        const data = (await res.json()) as { leads?: LeadEnquiry[] };
+        if (Array.isArray(data.leads)) {
+          return data.leads;
+        }
+      }
+    } catch {
+      backendMode = 'static';
+    }
+  }
+  return localSeedDemoLeads();
+}
+
+export async function apiClearDemoLeads(): Promise<LeadEnquiry[]> {
+  const hasBackend = await detectBackendAvailable();
+  if (hasBackend) {
+    try {
+      const res = await fetch('/api/leads/demo', { method: 'DELETE' });
+      if (await isJsonResponse(res)) {
+        const data = (await res.json()) as { leads?: LeadEnquiry[] };
+        if (Array.isArray(data.leads)) {
+          return data.leads;
+        }
+      }
+    } catch {
+      backendMode = 'static';
+    }
+  }
+  return localClearDemoLeads();
+}
+

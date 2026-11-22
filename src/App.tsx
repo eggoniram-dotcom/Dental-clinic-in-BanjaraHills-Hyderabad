@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
+import { FloatingWhatsAppButton } from './components/FloatingWhatsAppButton.tsx';
 import { PatientChatPage } from './components/PatientChatPage.tsx';
 import { StaffPortalPage } from './components/StaffPortalPage.tsx';
 import { TopBar } from './components/TopBar.tsx';
+import { TreatmentDetailPage } from './components/TreatmentDetailPage.tsx';
 import { apiGetClinicData } from './lib/clinicApi.ts';
 import { normalizeClinicData, type ClinicData } from './types.ts';
 
@@ -37,16 +39,29 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  const navigate = useCallback((path: string) => {
-    if (window.location.pathname !== path) {
-      window.history.pushState({}, '', path);
-    }
-    setCurrentPath(path);
-    // Refresh clinic data on navigation so edits stay in sync
-    void loadClinicData();
-  }, [loadClinicData]);
+  const navigate = useCallback(
+    (path: string, sectionId?: string) => {
+      if (window.location.pathname !== path) {
+        window.history.pushState({}, '', path);
+      }
+      setCurrentPath(path);
+      void loadClinicData();
+
+      if (sectionId) {
+        window.setTimeout(() => {
+          const el = document.getElementById(sectionId);
+          el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 70);
+      } else {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    },
+    [loadClinicData],
+  );
 
   const isStaff = currentPath.startsWith('/staff');
+  const treatmentMatch = currentPath.match(/^\/treatments\/([^/]+)\/?$/);
+  const treatmentSlug = treatmentMatch ? decodeURIComponent(treatmentMatch[1]) : null;
 
   return (
     <div className="min-h-dvh bg-[#f8faf9] text-slate-900">
@@ -55,14 +70,28 @@ export default function App() {
         onNavigate={navigate}
         emergencyPhone={clinicData.emergencyPhone}
       />
+
       {isStaff ? (
         <StaffPortalPage
           clinicData={clinicData}
           onClinicDataUpdated={(updated) => setClinicData(updated)}
         />
+      ) : treatmentSlug ? (
+        <TreatmentDetailPage
+          slug={treatmentSlug}
+          clinicData={clinicData}
+          onNavigateHome={(sectionId) => navigate('/', sectionId)}
+          onSelectTreatment={(slug) => navigate(`/treatments/${slug}`)}
+        />
       ) : (
-        <PatientChatPage clinicData={clinicData} />
+        <PatientChatPage
+          clinicData={clinicData}
+          onNavigateStaff={() => navigate('/staff')}
+          onSelectTreatment={(slug) => navigate(`/treatments/${slug}`)}
+        />
       )}
+
+      {!isStaff && <FloatingWhatsAppButton clinicData={clinicData} />}
     </div>
   );
 }

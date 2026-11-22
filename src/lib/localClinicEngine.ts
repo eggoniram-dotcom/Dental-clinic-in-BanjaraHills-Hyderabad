@@ -3,6 +3,8 @@ import {
   type ChatMessage,
   type ClinicData,
   type LanguageCode,
+  type LeadEnquiry,
+  type LeadStatus,
   type Ticket,
   type TicketStatus,
 } from '../types.ts';
@@ -11,6 +13,7 @@ import { DEFAULT_CLINIC_DATA } from './defaultClinicData.ts';
 const LS_CLINIC_KEY = 'dentistae_clinic_data_v1';
 const LS_TICKETS_KEY = 'dentistae_tickets_v1';
 const LS_SESSIONS_KEY = 'dentistae_sessions_v1';
+const LS_LEADS_KEY = 'dentistae_leads_v1';
 
 const PRIORITY_WEIGHT: Record<TicketStatus, number> = {
   urgent: 0,
@@ -771,3 +774,171 @@ export function localHandleChat(sessionId: string, message: string): {
     messages,
   };
 }
+
+export function localGetAllLeads(): LeadEnquiry[] {
+  const leads = readStorage<LeadEnquiry[]>(LS_LEADS_KEY, []);
+  return [...leads].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+}
+
+export function localCreateLead(input: {
+  patientName: string;
+  phone: string;
+  treatment: string;
+  preferredDate: string;
+  preferredTime?: string;
+  message?: string;
+  source?: LeadEnquiry['source'];
+}): { lead: LeadEnquiry; ticket: Ticket } {
+  const leads = readStorage<LeadEnquiry[]>(LS_LEADS_KEY, []);
+  const now = new Date().toISOString();
+  const bookingSlot = [input.preferredDate, input.preferredTime]
+    .filter(Boolean)
+    .join(' · ');
+
+  const ticket = localCreateTicket({
+    sessionId: `lead-${Date.now()}`,
+    patientName: input.patientName.trim(),
+    question: `Appointment enquiry for ${input.treatment} (${bookingSlot || 'Date TBC'}). Phone: ${input.phone.trim()}${input.message?.trim() ? ` — Note: ${input.message.trim()}` : ''}`,
+    status: 'needs human',
+    category: 'booking',
+    bookingTime: bookingSlot || 'Callback requested',
+  });
+
+  const lead: LeadEnquiry = {
+    id: `LD-${String(leads.length + 201)}`,
+    patientName: input.patientName.trim(),
+    phone: input.phone.trim(),
+    treatment: input.treatment.trim(),
+    preferredDate: input.preferredDate.trim(),
+    preferredTime: input.preferredTime?.trim() || undefined,
+    message: input.message?.trim() || undefined,
+    source: input.source || 'appointment-form',
+    status: 'New',
+    ticketId: ticket.id,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  leads.push(lead);
+  writeStorage(LS_LEADS_KEY, leads);
+  return { lead, ticket };
+}
+
+export function localUpdateLead(
+  leadId: string,
+  patch: {
+    status?: LeadStatus;
+    followUpNote?: string;
+    followUpDate?: string;
+    reminderSentAt?: string;
+  },
+): LeadEnquiry | null {
+  const leads = readStorage<LeadEnquiry[]>(LS_LEADS_KEY, []);
+  const idx = leads.findIndex((l) => l.id === leadId);
+  if (idx === -1) return null;
+
+  const current = leads[idx];
+  const updated: LeadEnquiry = {
+    ...current,
+    status: patch.status ?? current.status,
+    followUpNote:
+      patch.followUpNote !== undefined ? patch.followUpNote : current.followUpNote,
+    followUpDate:
+      patch.followUpDate !== undefined ? patch.followUpDate : current.followUpDate,
+    reminderSentAt:
+      patch.reminderSentAt !== undefined
+        ? patch.reminderSentAt
+        : current.reminderSentAt,
+    updatedAt: new Date().toISOString(),
+  };
+
+  leads[idx] = updated;
+  writeStorage(LS_LEADS_KEY, leads);
+  return updated;
+}
+
+export function localSeedDemoLeads(): LeadEnquiry[] {
+  const leads = readStorage<LeadEnquiry[]>(LS_LEADS_KEY, []);
+  if (leads.some((l) => l.source === 'demo-sample')) {
+    return localGetAllLeads();
+  }
+
+  const now = Date.now();
+  const tomorrow = new Date(now + 86400000).toISOString().slice(0, 10);
+  const inTwoDays = new Date(now + 2 * 86400000).toISOString().slice(0, 10);
+
+  const samples: LeadEnquiry[] = [
+    {
+      id: 'LD-DEMO-1',
+      patientName: 'Demo Patient 1 (Illustrative)',
+      phone: '+91 98490 00001',
+      treatment: 'Titanium Dental Implant (Fixture)',
+      preferredDate: tomorrow,
+      preferredTime: '11:30 AM',
+      message: 'Sample enquiry for single molar implant consultation.',
+      source: 'demo-sample',
+      status: 'Appointment',
+      followUpNote: 'Confirmed slot with Dr. Vikramaditya Rao.',
+      followUpDate: tomorrow,
+      createdAt: new Date(now - 3 * 3600000).toISOString(),
+      updatedAt: new Date(now - 2 * 3600000).toISOString(),
+    },
+    {
+      id: 'LD-DEMO-2',
+      patientName: 'Demo Patient 2 (Illustrative)',
+      phone: '+91 98490 00002',
+      treatment: 'Root Canal Treatment (RCT)',
+      preferredDate: tomorrow,
+      preferredTime: '4:30 PM',
+      message: 'Sample enquiry asking about single-sitting RCT availability.',
+      source: 'demo-sample',
+      status: 'New',
+      followUpNote: 'Call back within 2 working hours.',
+      followUpDate: tomorrow,
+      createdAt: new Date(now - 90 * 60000).toISOString(),
+      updatedAt: new Date(now - 90 * 60000).toISOString(),
+    },
+    {
+      id: 'LD-DEMO-3',
+      patientName: 'Demo Patient 3 (Illustrative)',
+      phone: '+91 98490 00003',
+      treatment: 'In-Office Teeth Whitening',
+      preferredDate: inTwoDays,
+      preferredTime: '6:00 PM',
+      message: 'Sample enquiry before a family wedding.',
+      source: 'demo-sample',
+      status: 'Contacted',
+      followUpNote: 'Shared published tariff on WhatsApp; awaiting slot confirmation.',
+      followUpDate: tomorrow,
+      createdAt: new Date(now - 26 * 3600000).toISOString(),
+      updatedAt: new Date(now - 6 * 3600000).toISOString(),
+    },
+    {
+      id: 'LD-DEMO-4',
+      patientName: 'Demo Patient 4 (Illustrative)',
+      phone: '+91 98490 00004',
+      treatment: 'Clear Aligners',
+      preferredDate: inTwoDays,
+      preferredTime: '3:00 PM',
+      message: 'Sample enquiry for 3D aligner scan.',
+      source: 'demo-sample',
+      status: 'Converted',
+      followUpNote: 'Completed consultation & 3D scan with Dr. Karthikeya Sharma.',
+      createdAt: new Date(now - 52 * 3600000).toISOString(),
+      updatedAt: new Date(now - 12 * 3600000).toISOString(),
+    },
+  ];
+
+  writeStorage(LS_LEADS_KEY, [...samples, ...leads]);
+  return localGetAllLeads();
+}
+
+export function localClearDemoLeads(): LeadEnquiry[] {
+  const leads = readStorage<LeadEnquiry[]>(LS_LEADS_KEY, []);
+  const filtered = leads.filter((l) => l.source !== 'demo-sample');
+  writeStorage(LS_LEADS_KEY, filtered);
+  return localGetAllLeads();
+}
+

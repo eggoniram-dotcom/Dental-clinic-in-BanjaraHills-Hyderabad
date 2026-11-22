@@ -20,13 +20,14 @@ import {
   apiUpdateTicketStatus,
 } from '../lib/clinicApi.ts';
 import { normalizeClinicData, type ClinicData, type Ticket, type TicketStatus } from '../types.ts';
+import { LeadDashboardPanel } from './LeadDashboardPanel.tsx';
 
 interface StaffPortalPageProps {
   clinicData: ClinicData;
   onClinicDataUpdated: (updated: ClinicData) => void;
 }
 
-type StaffTab = 'tickets' | 'clinic-file';
+type StaffTab = 'tickets' | 'leads' | 'clinic-file';
 type StatusFilter = 'all' | TicketStatus;
 
 function formatAge(createdAt: string, nowMs: number): { label: string; minutes: number } {
@@ -256,11 +257,11 @@ export function StaffPortalPage({
           </p>
         </div>
 
-        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl self-start sm:self-auto">
+        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl self-start sm:self-auto overflow-x-auto max-w-full">
           <button
             type="button"
             onClick={() => setActiveTab('tickets')}
-            className={`px-3.5 py-2 min-h-[40px] text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+            className={`px-3.5 py-2 min-h-[40px] text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'tickets'
                 ? 'bg-white text-emerald-950 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
@@ -270,8 +271,19 @@ export function StaffPortalPage({
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab('leads')}
+            className={`px-3.5 py-2 min-h-[40px] text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              activeTab === 'leads'
+                ? 'bg-white text-emerald-950 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Lead Dashboard
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('clinic-file')}
-            className={`px-3.5 py-2 min-h-[40px] text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 ${
+            className={`px-3.5 py-2 min-h-[40px] text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'clinic-file'
                 ? 'bg-white text-emerald-950 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
@@ -282,7 +294,9 @@ export function StaffPortalPage({
         </div>
       </div>
 
-      {activeTab === 'tickets' ? (
+      {activeTab === 'leads' ? (
+        <LeadDashboardPanel clinicData={clinicData} />
+      ) : activeTab === 'tickets' ? (
         <section aria-label="Ticket queue workspace" className="space-y-4">
           {/* Summary Strip */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

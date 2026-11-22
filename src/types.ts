@@ -71,6 +71,27 @@ export interface Ticket {
   }[];
 }
 
+export type LeadStatus = 'New' | 'Contacted' | 'Appointment' | 'Converted';
+
+export interface LeadEnquiry {
+  id: string;
+  patientName: string;
+  phone: string;
+  treatment: string;
+  preferredDate: string;
+  preferredTime?: string;
+  message?: string;
+  source: 'appointment-form' | 'treatment-page' | 'chat-booking' | 'demo-sample';
+  status: LeadStatus;
+  followUpNote?: string;
+  followUpDate?: string;
+  reminderSentAt?: string;
+  ticketId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+
 export function normalizeClinicData(
   input: Partial<ClinicData> | null | undefined,
 ): ClinicData {
