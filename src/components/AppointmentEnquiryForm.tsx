@@ -7,6 +7,9 @@ import type { ClinicData, LeadEnquiry } from '../types.ts';
 interface AppointmentEnquiryFormProps {
   clinicData: ClinicData;
   initialTreatment?: string;
+  initialDate?: string;
+  initialSlot?: string;
+  initialNote?: string;
   source?: 'appointment-form' | 'treatment-page';
 }
 
@@ -26,6 +29,9 @@ function getTomorrowIsoDate(): string {
 export function AppointmentEnquiryForm({
   clinicData,
   initialTreatment,
+  initialDate,
+  initialSlot,
+  initialNote,
   source = 'appointment-form',
 }: AppointmentEnquiryFormProps) {
   const treatmentOptions =
@@ -47,9 +53,11 @@ export function AppointmentEnquiryForm({
       ? initialTreatment
       : treatmentOptions[0],
   );
-  const [preferredDate, setPreferredDate] = useState(() => getTomorrowIsoDate());
-  const [preferredTime, setPreferredTime] = useState(PREFERRED_SLOTS[0]);
-  const [message, setMessage] = useState('');
+  const [preferredDate, setPreferredDate] = useState(() => initialDate || getTomorrowIsoDate());
+  const [preferredTime, setPreferredTime] = useState(
+    initialSlot && PREFERRED_SLOTS.includes(initialSlot) ? initialSlot : PREFERRED_SLOTS[0],
+  );
+  const [message, setMessage] = useState(initialNote || '');
   const [submitting, setSubmitting] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [submittedLead, setSubmittedLead] = useState<{
@@ -62,6 +70,24 @@ export function AppointmentEnquiryForm({
       setTreatment(initialTreatment);
     }
   }, [initialTreatment, clinicData.services]);
+
+  useEffect(() => {
+    if (initialDate) {
+      setPreferredDate(initialDate);
+    }
+  }, [initialDate]);
+
+  useEffect(() => {
+    if (initialSlot && PREFERRED_SLOTS.includes(initialSlot)) {
+      setPreferredTime(initialSlot);
+    }
+  }, [initialSlot]);
+
+  useEffect(() => {
+    if (initialNote) {
+      setMessage(initialNote);
+    }
+  }, [initialNote]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

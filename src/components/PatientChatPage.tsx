@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
+  Award,
   Calendar,
   CheckCircle2,
   ChevronDown,
@@ -23,6 +24,7 @@ import {
   buildGoogleMapsDirectionsLink,
   buildWhatsAppLink,
   getDoctorEnrichment,
+  getNearestDoctorSlots,
   resolveTreatmentService,
 } from '../lib/clinicCatalog.ts';
 import type { ChatMessage, ClinicData } from '../types.ts';
@@ -124,12 +126,19 @@ export function PatientChatPage({
   const markImageBroken = (key: string) =>
     setBrokenImages((prev) => ({ ...prev, [key]: true }));
 
-  // Interactive inline chat booking drawer
+  // Interactive inline chat booking drawer & doctor slot picker
   const [bookingDrawerOpen, setBookingDrawerOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState('Tomorrow');
   const [selectedTime, setSelectedTime] = useState('4:30 PM');
   const [selectedDoctor, setSelectedDoctor] = useState('');
   const [preselectedTreatment, setPreselectedTreatment] = useState<string | undefined>(undefined);
+  const [preselectedDate, setPreselectedDate] = useState<string | undefined>(undefined);
+  const [preselectedSlot, setPreselectedSlot] = useState<string | undefined>(undefined);
+  const [preselectedNote, setPreselectedNote] = useState<string | undefined>(undefined);
+  const [activeSlotDoctorId, setActiveSlotDoctorId] = useState<string | null>(null);
+  const [pickedDoctorSlots, setPickedDoctorSlots] = useState<
+    Record<string, { isoDate: string; dayLabel: string; shortDayName: string; time: string }>
+  >({});
 
   // Verified patient feedback with explicit consent (never fabricated)
   const [feedbackItems, setFeedbackItems] = useState<ConsentFeedbackItem[]>(() =>
@@ -264,11 +273,32 @@ export function PatientChatPage({
     }, 350);
   };
 
-  const scrollToAppointmentForm = (treatmentName?: string) => {
+  const scrollToAppointmentForm = (
+    treatmentName?: string,
+    opts?: { date?: string; slot?: string; note?: string },
+  ) => {
     if (treatmentName) {
       setPreselectedTreatment(treatmentName);
     }
+    if (opts?.date) setPreselectedDate(opts.date);
+    if (opts?.slot) setPreselectedSlot(opts.slot);
+    if (opts?.note) setPreselectedNote(opts.note);
     bookingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const mapTimeToPreferredWindow = (timeStr: string, shortDayName: string): string => {
+    if (shortDayName.toLowerCase().startsWith('sun')) {
+      return 'Sunday (10:00 AM – 2:00 PM)';
+    }
+    const lower = timeStr.toLowerCase();
+    if (lower.includes('am') || lower.startsWith('12:')) {
+      return 'Morning (9:30 AM – 12:30 PM)';
+    }
+    const hour = parseInt(lower.split(':')[0] || '0', 10);
+    if (hour >= 5 && hour < 12) {
+      return 'Evening (5:00 PM – 7:30 PM)';
+    }
+    return 'Afternoon (2:30 PM – 5:00 PM)';
   };
 
   const handleConfirmSlotBooking = (e: React.FormEvent) => {
@@ -998,80 +1028,282 @@ export function PatientChatPage({
       </section>
 
       {/* ============================================================
-          SECTION 4: DOCTOR PROFILES (Photographs, Qualifications,
-          Specialisations & Treatment Philosophy)
+          SECTION 4: MEET OUR DENTISTS (Photographs, BDS/MDS Qualifications,
+          TSDC Registration Details, Clinical Expertise, Consultation Timings
+          & Interactive Nearest Slot Booking)
          ============================================================ */}
       <section
         id="doctors"
-        aria-label="Doctor profiles and treatment philosophy"
+        aria-label="Meet our dentists"
         className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 scroll-mt-16"
       >
-        <div className="max-w-2xl">
-          <p className="text-xs sm:text-sm font-medium text-emerald-800">
-            About Our Clinic &amp; Specialists · Banjara Hills
-          </p>
-          <h2
-            className="mt-1.5 text-2xl sm:text-3xl font-bold tracking-tight text-emerald-950"
-            style={{ textWrap: 'balance' }}
-          >
-            Meet the Dentists Behind Your Care
-          </h2>
-          <p className="mt-2.5 text-sm sm:text-base text-slate-600 leading-relaxed">
-            Every treatment plan at {clinicData.clinicName} is led by a dedicated specialist with
-            published qualifications, transparent clinic tariffs, and unhurried chairside guidance.
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div className="max-w-2xl">
+            <p className="text-xs sm:text-sm font-medium text-emerald-800">
+              TSDC-Registered Dental Specialists · Banjara Hills, Hyderabad
+            </p>
+            <h2
+              className="mt-1.5 text-2xl sm:text-3xl font-bold tracking-tight text-emerald-950"
+              style={{ textWrap: 'balance' }}
+            >
+              Meet Our Dentists
+            </h2>
+            <p className="mt-2.5 text-sm sm:text-base text-slate-600 leading-relaxed">
+              Review each dentist’s BDS/MDS qualifications, Telangana State Dental Council
+              registration details, areas of clinical expertise, and live consultation timings
+              before requesting your slot.
+            </p>
+          </div>
+          <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
+            All specialist profiles and consultation hours sync live with our Banjara Hills clinic
+            file.
           </p>
         </div>
 
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
           {clinicData.doctors.map((doc, idx) => {
             const enrichment = getDoctorEnrichment(doc, idx);
             const imgKey = `doc-${doc.id}`;
+            const registrationText =
+              doc.registrationNumber?.trim() || enrichment.registrationFallback;
+            const expertiseList =
+              doc.expertise && doc.expertise.length > 0 ? doc.expertise : enrichment.focusAreas;
+            const slotDays = getNearestDoctorSlots(doc);
+            const isSlotPickerOpen = activeSlotDoctorId === doc.id;
+            const currentPick =
+              pickedDoctorSlots[doc.id] ||
+              (slotDays[0]
+                ? {
+                    isoDate: slotDays[0].isoDate,
+                    dayLabel: slotDays[0].dayLabel,
+                    shortDayName: slotDays[0].shortDayName,
+                    time: slotDays[0].times[0],
+                  }
+                : null);
+
             return (
               <article
                 key={doc.id}
-                className="rounded-2xl bg-white border border-emerald-950/10 overflow-hidden flex flex-col sm:flex-row"
+                className="rounded-2xl bg-white border border-emerald-950/10 overflow-hidden flex flex-col justify-between"
               >
-                <div className="sm:w-44 lg:w-48 shrink-0 aspect-[4/3] sm:aspect-auto bg-emerald-950/5 overflow-hidden">
-                  {!brokenImages[imgKey] ? (
-                    <img
-                      src={enrichment.portrait}
-                      alt={`${doc.name}, ${doc.qualification} at ${clinicData.clinicName}`}
-                      referrerPolicy="no-referrer"
-                      onError={() => markImageBroken(imgKey)}
-                      className="w-full h-full object-cover object-top"
-                    />
-                  ) : (
-                    <div className="w-full h-full min-h-[180px] flex flex-col items-center justify-center bg-gradient-to-br from-emerald-50 to-stone-100 text-emerald-900 p-4 text-center">
-                      <Stethoscope className="w-8 h-8 mb-2 opacity-75" aria-hidden="true" />
-                      <span className="text-xs font-semibold">{doc.name}</span>
+                <div>
+                  {/* Top Profile Header: Portrait + Name + Qualifications (BDS/MDS) + Registration */}
+                  <div className="grid grid-cols-1 sm:grid-cols-[176px_1fr] gap-0 border-b border-slate-100">
+                    <div className="aspect-[4/3] sm:aspect-auto sm:min-h-[220px] bg-emerald-950/5 overflow-hidden">
+                      {!brokenImages[imgKey] ? (
+                        <img
+                          src={enrichment.portrait}
+                          alt={`${doc.name}, ${doc.qualification} at ${clinicData.clinicName}`}
+                          referrerPolicy="no-referrer"
+                          onError={() => markImageBroken(imgKey)}
+                          className="w-full h-full object-cover object-top"
+                        />
+                      ) : (
+                        <div className="w-full h-full min-h-[180px] flex flex-col items-center justify-center bg-gradient-to-br from-emerald-50 to-stone-100 text-emerald-900 p-4 text-center">
+                          <Stethoscope className="w-8 h-8 mb-2 opacity-75" aria-hidden="true" />
+                          <span className="text-xs font-semibold">{doc.name}</span>
+                        </div>
+                      )}
                     </div>
-                  )}
+
+                    <div className="p-5 flex flex-col justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg sm:text-xl font-bold text-emerald-950 tracking-tight">
+                          {doc.name}
+                        </h3>
+                        <p className="mt-1 text-sm font-semibold text-emerald-800">
+                          {doc.specialty}
+                        </p>
+
+                        {/* Qualifications (BDS/MDS) */}
+                        <div className="mt-3 flex items-start gap-2 text-xs text-slate-700">
+                          <Award
+                            className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5"
+                            aria-hidden="true"
+                          />
+                          <div>
+                            <span className="font-semibold text-slate-900">Qualifications: </span>
+                            <span>{doc.qualification}</span>
+                          </div>
+                        </div>
+
+                        {/* Registration Details */}
+                        <div className="mt-2 flex items-start gap-2 text-xs text-slate-700">
+                          <ShieldCheck
+                            className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5"
+                            aria-hidden="true"
+                          />
+                          <div className="tabular-nums">
+                            <span className="font-semibold text-slate-900">Registration: </span>
+                            <span>{registrationText}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-slate-600 leading-relaxed pt-2 border-t border-slate-100">
+                        {enrichment.philosophy}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Clinical Expertise + Consultation Timings */}
+                  <div className="p-5 space-y-4">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-900">
+                        Areas of Clinical Expertise
+                      </p>
+                      <ul className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
+                        {expertiseList.map((area) => (
+                          <li
+                            key={area}
+                            className="flex items-start gap-2 text-xs text-slate-700 leading-snug"
+                          >
+                            <CheckCircle2
+                              className="w-3.5 h-3.5 text-emerald-700 shrink-0 mt-0.5"
+                              aria-hidden="true"
+                            />
+                            <span>{area}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="rounded-xl bg-[#f4f8f6] border border-emerald-950/8 px-3.5 py-2.5 flex items-start gap-2.5">
+                      <Clock
+                        className="w-4 h-4 text-emerald-800 shrink-0 mt-0.5"
+                        aria-hidden="true"
+                      />
+                      <div className="text-xs">
+                        <p className="font-semibold text-emerald-950">Consultation Timings</p>
+                        <p className="text-slate-700 mt-0.5 tabular-nums">{doc.schedule}</p>
+                      </div>
+                    </div>
+
+                    {/* Expandable Nearest Consultation Slots Picker */}
+                    {isSlotPickerOpen && slotDays.length > 0 && currentPick && (
+                      <div className="rounded-xl bg-white border border-emerald-900/20 p-4 space-y-3.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-semibold text-emerald-950">
+                            Nearest Available Slots · {doc.name}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setActiveSlotDoctorId(null)}
+                            aria-label="Close slot picker"
+                            className="p-1 text-slate-400 hover:text-slate-700 rounded cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" aria-hidden="true" />
+                          </button>
+                        </div>
+
+                        <div className="space-y-3">
+                          {slotDays.map((dayObj) => (
+                            <div key={dayObj.isoDate}>
+                              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5 tabular-nums">
+                                {dayObj.dayLabel}
+                              </p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {dayObj.times.map((slotTime) => {
+                                  const isSelected =
+                                    currentPick.isoDate === dayObj.isoDate &&
+                                    currentPick.time === slotTime;
+                                  return (
+                                    <button
+                                      key={`${dayObj.isoDate}-${slotTime}`}
+                                      type="button"
+                                      onClick={() =>
+                                        setPickedDoctorSlots((prev) => ({
+                                          ...prev,
+                                          [doc.id]: {
+                                            isoDate: dayObj.isoDate,
+                                            dayLabel: dayObj.dayLabel,
+                                            shortDayName: dayObj.shortDayName,
+                                            time: slotTime,
+                                          },
+                                        }))
+                                      }
+                                      className={`px-2.5 py-1.5 min-h-[34px] rounded-lg text-xs font-medium tabular-nums border transition-colors cursor-pointer ${
+                                        isSelected
+                                          ? 'bg-emerald-900 text-white border-emerald-900'
+                                          : 'bg-white text-slate-700 border-slate-200 hover:border-emerald-700 hover:text-emerald-950'
+                                      }`}
+                                    >
+                                      {slotTime}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              scrollToAppointmentForm(enrichment.defaultTreatmentName, {
+                                date: currentPick.isoDate,
+                                slot: mapTimeToPreferredWindow(
+                                  currentPick.time,
+                                  currentPick.shortDayName,
+                                ),
+                                note: `Preferred Dentist: ${doc.name} · Requested Slot: ${currentPick.dayLabel} at ${currentPick.time}`,
+                              });
+                            }}
+                            className="inline-flex items-center justify-center gap-1.5 min-h-[38px] px-4 py-2 rounded-lg bg-emerald-900 text-white text-xs font-semibold hover:bg-emerald-800 transition-colors cursor-pointer"
+                          >
+                            <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
+                            <span>
+                              Book {currentPick.dayLabel.split(',')[0]} · {currentPick.time}
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedDoctor(doc.name);
+                              setSelectedDay(currentPick.shortDayName);
+                              setSelectedTime(currentPick.time);
+                              setActiveSlotDoctorId(null);
+                              chatSectionRef.current?.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'start',
+                              });
+                              void sendMessage(
+                                `I would like to book an appointment with ${doc.name} on ${currentPick.dayLabel} at ${currentPick.time}.`,
+                              );
+                            }}
+                            className="inline-flex items-center justify-center gap-1.5 min-h-[38px] px-3.5 py-2 rounded-lg border border-emerald-950/15 bg-white text-xs font-semibold text-emerald-950 hover:bg-emerald-50 transition-colors cursor-pointer"
+                          >
+                            <span>Request in Chat</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="p-5 flex-1 flex flex-col justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-medium text-emerald-800">{doc.qualification}</p>
-                    <h3 className="mt-1 text-lg font-bold text-emerald-950">{doc.name}</h3>
-                    <p className="mt-1 text-sm font-medium text-slate-800">{doc.specialty}</p>
-                    <p className="mt-2.5 text-xs sm:text-sm text-slate-600 leading-relaxed">
-                      {enrichment.philosophy}
-                    </p>
-                    <p className="mt-3 text-xs text-slate-500">
-                      Focus: {enrichment.focusAreas.join(' · ')}
-                    </p>
-                  </div>
+                {/* Card Action Footer */}
+                <div className="px-5 py-3.5 bg-[#f8faf9] border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setActiveSlotDoctorId((prev) => (prev === doc.id ? null : doc.id))
+                    }
+                    className="inline-flex items-center gap-1.5 min-h-[40px] px-4 py-2 rounded-xl bg-emerald-900 text-white text-xs font-semibold hover:bg-emerald-800 transition-colors whitespace-nowrap cursor-pointer"
+                  >
+                    <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>{isSlotPickerOpen ? 'Hide Available Slots' : 'Select Consultation Slot'}</span>
+                  </button>
 
-                  <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-xs text-slate-500 tabular-nums">{doc.schedule}</span>
-                    <button
-                      type="button"
-                      onClick={() => openChatBookingFlow(doc.name)}
-                      className="inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 rounded-lg border border-emerald-950/15 bg-white text-xs font-semibold text-emerald-950 hover:bg-emerald-50 transition-colors whitespace-nowrap cursor-pointer"
-                    >
-                      <span>Request Slot</span>
-                      <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openChatBookingFlow(doc.name)}
+                    className="inline-flex items-center gap-1.5 min-h-[40px] px-3.5 py-2 rounded-xl border border-emerald-950/15 bg-white text-xs font-semibold text-emerald-950 hover:bg-emerald-50 transition-colors whitespace-nowrap cursor-pointer"
+                  >
+                    <span>Ask Front Desk</span>
+                    <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                  </button>
                 </div>
               </article>
             );
@@ -1308,6 +1540,9 @@ export function PatientChatPage({
               <AppointmentEnquiryForm
                 clinicData={clinicData}
                 initialTreatment={preselectedTreatment}
+                initialDate={preselectedDate}
+                initialSlot={preselectedSlot}
+                initialNote={preselectedNote}
                 source="appointment-form"
               />
             </div>

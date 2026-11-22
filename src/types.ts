@@ -6,7 +6,9 @@ export interface DoctorInfo {
   id: string;
   name: string;
   qualification: string;
+  registrationNumber?: string;
   specialty: string;
+  expertise?: string[];
   schedule: string;
 }
 

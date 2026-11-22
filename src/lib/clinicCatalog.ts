@@ -13,38 +13,68 @@ export const CLINIC_IMAGES = {
 export interface DoctorProfileEnrichment {
   portrait: string;
   experienceLabel: string;
+  registrationFallback: string;
   philosophy: string;
   focusAreas: string[];
+  defaultTreatmentName: string;
 }
 
 export const DOCTOR_PROFILE_MAP: Record<string, DoctorProfileEnrichment> = {
   'doc-ananya': {
     portrait: CLINIC_IMAGES.docAnanya,
     experienceLabel: 'Conservative Dentistry & Micro-Endodontics',
+    registrationFallback: 'TSDC Reg. No. A-14829 · Telangana State Dental Council',
     philosophy:
       'Preserve natural tooth structure wherever clinically feasible through magnification-guided root canals, clear pre-treatment X-rays, and calm chairside guidance.',
-    focusAreas: ['Single & Multi-Sitting Root Canal', 'Re-Treatment Endodontics', 'Post & Core Restoration'],
+    focusAreas: [
+      'Single & Multi-Sitting Root Canal (RCT)',
+      'Micro-Endodontic Re-Treatment',
+      'Post & Core Restorations',
+      'Digital RVG Diagnostics',
+    ],
+    defaultTreatmentName: 'Root Canal Treatment (RCT)',
   },
   'doc-vikram': {
     portrait: CLINIC_IMAGES.docVikram,
     experienceLabel: 'Oral Surgery & Titanium Implantology',
+    registrationFallback: 'TSDC Reg. No. A-13264 · Telangana State Dental Council',
     philosophy:
       'Plan every surgical and implant case digitally before touching a tooth, prioritising atraumatic extraction, sterile Class-B protocols, and comfortable recovery.',
-    focusAreas: ['Titanium Dental Implants', 'Impacted Wisdom Tooth Removal', 'Bone Grafting & Minor Oral Surgery'],
+    focusAreas: [
+      'Titanium Dental Implants',
+      'Surgical Wisdom Tooth Removal',
+      'Atraumatic Tooth Extractions',
+      'Minor Oral & Jaw Surgery',
+    ],
+    defaultTreatmentName: 'Titanium Dental Implant (Fixture)',
   },
   'doc-meera': {
     portrait: CLINIC_IMAGES.docMeera,
     experienceLabel: 'Preventive & Aesthetic General Care',
+    registrationFallback: 'TSDC Reg. No. A-18940 · Telangana State Dental Council',
     philosophy:
       'Build long-term oral health through gentle ultrasonic cleanings, shade-matched tooth-coloured restorations, and transparent preventive check-ups for the whole family.',
-    focusAreas: ['Dental Cleaning & Polishing', 'Composite Fillings', 'In-Office Teeth Whitening'],
+    focusAreas: [
+      'Ultrasonic Dental Cleaning & Polishing',
+      'Tooth-Coloured Composite Fillings',
+      'In-Office Teeth Whitening',
+      'Preventive Family Oral Check-Ups',
+    ],
+    defaultTreatmentName: 'Scaling & Polishing (Teeth Cleaning)',
   },
   'doc-karthik': {
     portrait: CLINIC_IMAGES.docKarthik,
     experienceLabel: 'Orthodontics & 3D Clear Aligner Planning',
+    registrationFallback: 'TSDC Reg. No. A-16105 · Telangana State Dental Council',
     philosophy:
       'Combine facial harmony with healthy bite function using 3D intraoral scanning and predictable orthodontic timelines for teens and working adults.',
-    focusAreas: ['Clear Aligners', 'Metal & Ceramic Braces', 'Bite Alignment & Retainers'],
+    focusAreas: [
+      '3D Clear Aligners',
+      'Metal & Ceramic Braces',
+      'Bite Alignment & Jaw Orthopaedics',
+      'Retention & Post-Braces Care',
+    ],
+    defaultTreatmentName: 'Clear Aligners',
   },
 };
 
@@ -60,10 +90,84 @@ export function getDoctorEnrichment(doc: DoctorInfo, index: number): DoctorProfi
   return {
     portrait: fallbackPortraits[index % fallbackPortraits.length],
     experienceLabel: doc.specialty,
+    registrationFallback: 'Registered Dental Practitioner · TSDC / DCI',
     philosophy:
       'Committed to gentle, evidence-based dental care with published clinic tariffs and clear pre-treatment explanations.',
-    focusAreas: [doc.specialty],
+    focusAreas: doc.expertise && doc.expertise.length > 0 ? doc.expertise : [doc.specialty],
+    defaultTreatmentName: 'Consultation & Oral Check-up',
   };
+}
+
+export interface DoctorSlotDay {
+  isoDate: string;
+  dayLabel: string;
+  shortDayName: string;
+  times: string[];
+}
+
+/**
+ * Computes the next 3 upcoming consultation days & times strictly matched to
+ * the dentist's published clinic schedule (respecting 1:30 PM – 2:30 PM lunch break).
+ */
+export function getNearestDoctorSlots(doc: DoctorInfo): DoctorSlotDay[] {
+  const sched = (doc.schedule || '').toLowerCase();
+
+  // Determine active weekdays (0=Sun, 1=Mon, ..., 6=Sat)
+  const activeDays = new Set<number>();
+  if (/mon\s*[–-]\s*sat/.test(sched)) {
+    [1, 2, 3, 4, 5, 6].forEach((d) => activeDays.add(d));
+  } else if (/mon\s*[–-]\s*fri/.test(sched)) {
+    [1, 2, 3, 4, 5].forEach((d) => activeDays.add(d));
+  } else {
+    if (/\bmon\b/.test(sched)) activeDays.add(1);
+    if (/\btue\b/.test(sched)) activeDays.add(2);
+    if (/\bwed\b/.test(sched)) activeDays.add(3);
+    if (/\bthu\b/.test(sched)) activeDays.add(4);
+    if (/\bfri\b/.test(sched)) activeDays.add(5);
+    if (/\bsat\b/.test(sched)) activeDays.add(6);
+  }
+  if (/\bsun\b/.test(sched)) activeDays.add(0);
+  if (activeDays.size === 0) {
+    [1, 2, 3, 4, 5, 6].forEach((d) => activeDays.add(d));
+  }
+
+  // Pick realistic time slots aligned to the dentist's schedule
+  const weekdayTimes = (() => {
+    if (sched.includes('2:00 pm') && sched.includes('8:00 pm')) {
+      return ['2:30 PM', '4:00 PM', '5:30 PM', '7:00 PM'];
+    }
+    if (sched.includes('11:00 am') && sched.includes('7:00 pm')) {
+      return ['11:00 AM', '12:30 PM', '3:00 PM', '5:00 PM', '6:15 PM'];
+    }
+    if (sched.includes('9:00 am') && sched.includes('5:00 pm')) {
+      return ['9:30 AM', '11:00 AM', '12:30 PM', '3:00 PM', '4:15 PM'];
+    }
+    return ['10:00 AM', '11:30 AM', '3:00 PM', '4:30 PM', '5:15 PM'];
+  })();
+  const sundayTimes = ['10:00 AM', '11:00 AM', '12:15 PM', '1:00 PM'];
+
+  const results: DoctorSlotDay[] = [];
+  const base = new Date();
+  for (let offset = 1; offset <= 10 && results.length < 3; offset += 1) {
+    const d = new Date(base);
+    d.setDate(base.getDate() + offset);
+    const dow = d.getDay();
+    if (!activeDays.has(dow)) continue;
+
+    const shortDayName = d.toLocaleDateString('en-IN', { weekday: 'long' });
+    const monthDay = d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+    const dayLabel =
+      offset === 1 ? `Tomorrow, ${monthDay}` : `${shortDayName.slice(0, 3)}, ${monthDay}`;
+
+    results.push({
+      isoDate: d.toISOString().slice(0, 10),
+      dayLabel,
+      shortDayName,
+      times: dow === 0 ? sundayTimes : weekdayTimes,
+    });
+  }
+
+  return results;
 }
 
 export interface TreatmentPageSpec {

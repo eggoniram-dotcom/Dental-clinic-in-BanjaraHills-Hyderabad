@@ -62,7 +62,22 @@ export function normalizeClinicData(input: Partial<ClinicData> | null | undefine
       sunday: typeof input.timings?.sunday === 'string' ? input.timings.sunday : base.timings.sunday,
       lunchBreak: typeof input.timings?.lunchBreak === 'string' ? input.timings.lunchBreak : base.timings.lunchBreak,
     },
-    doctors: Array.isArray(input.doctors) ? input.doctors : base.doctors,
+    doctors: Array.isArray(input.doctors)
+      ? input.doctors.map((doc) => {
+          const fallbackDoc = base.doctors.find((d) => d.id === doc.id);
+          return {
+            ...doc,
+            registrationNumber:
+              typeof doc.registrationNumber === 'string' && doc.registrationNumber.trim()
+                ? doc.registrationNumber
+                : fallbackDoc?.registrationNumber || '',
+            expertise:
+              Array.isArray(doc.expertise) && doc.expertise.length > 0
+                ? doc.expertise
+                : fallbackDoc?.expertise || [],
+          };
+        })
+      : base.doctors,
     services: Array.isArray(input.services) ? input.services : base.services,
     policies: Array.isArray(input.policies) ? input.policies : base.policies,
     insurance: {

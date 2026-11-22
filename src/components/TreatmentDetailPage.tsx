@@ -310,9 +310,14 @@ export function TreatmentDetailPage({
                     <h3 className="text-base font-bold text-emerald-950 mt-0.5">
                       {specialist.name}
                     </h3>
-                    <p className="text-xs text-slate-600 mt-0.5">{specialist.qualification}</p>
-                    <p className="text-xs text-slate-500 mt-2 tabular-nums">
-                      {specialist.schedule}
+                    <p className="text-xs font-medium text-slate-700 mt-0.5">
+                      {specialist.qualification}
+                    </p>
+                    <p className="text-[11px] text-emerald-800 mt-1 tabular-nums">
+                      {specialist.registrationNumber || docEnrichment.registrationFallback}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1.5 tabular-nums">
+                      Timings: {specialist.schedule}
                     </p>
                   </div>
                 </div>

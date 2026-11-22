@@ -803,7 +803,9 @@ export function StaffPortalPage({
                 {/* Doctors Editor */}
                 <div className="border-t border-slate-100 pt-5 space-y-3">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-slate-900">Doctors</h3>
+                    <h3 className="text-sm font-semibold text-slate-900">
+                      Doctors (Qualifications, Registration &amp; Timings)
+                    </h3>
                     <button
                       type="button"
                       onClick={() =>
@@ -814,8 +816,10 @@ export function StaffPortalPage({
                             {
                               id: `doc-${Date.now()}`,
                               name: 'Dr. New Specialist',
-                              qualification: 'MDS',
+                              qualification: 'BDS, MDS',
+                              registrationNumber: 'TSDC Reg. No. A-00000 · Telangana State Dental Council',
                               specialty: 'General Dentistry',
+                              expertise: ['Oral Check-Ups', 'Preventive Dentistry'],
                               schedule: 'Mon–Fri, 10:00 AM – 5:00 PM',
                             },
                           ],
@@ -831,65 +835,104 @@ export function StaffPortalPage({
                     {draftClinic.doctors.map((doc, idx) => (
                       <div
                         key={doc.id}
-                        className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_1fr_auto] gap-2 items-center border border-slate-200 rounded-xl p-3"
+                        className="border border-slate-200 rounded-xl p-3.5 space-y-2.5 bg-slate-50/40"
                       >
-                        <input
-                          type="text"
-                          value={doc.name}
-                          aria-label="Doctor name"
-                          onChange={(e) => {
-                            const next = [...draftClinic.doctors];
-                            next[idx] = { ...doc, name: e.target.value };
-                            setDraftClinic({ ...draftClinic, doctors: next });
-                          }}
-                          className="h-9 px-2.5 rounded-lg border border-slate-300 text-xs"
-                        />
-                        <input
-                          type="text"
-                          value={doc.qualification}
-                          aria-label="Doctor qualification"
-                          onChange={(e) => {
-                            const next = [...draftClinic.doctors];
-                            next[idx] = { ...doc, qualification: e.target.value };
-                            setDraftClinic({ ...draftClinic, doctors: next });
-                          }}
-                          className="h-9 px-2.5 rounded-lg border border-slate-300 text-xs"
-                        />
-                        <input
-                          type="text"
-                          value={doc.specialty}
-                          aria-label="Doctor specialty"
-                          onChange={(e) => {
-                            const next = [...draftClinic.doctors];
-                            next[idx] = { ...doc, specialty: e.target.value };
-                            setDraftClinic({ ...draftClinic, doctors: next });
-                          }}
-                          className="h-9 px-2.5 rounded-lg border border-slate-300 text-xs"
-                        />
-                        <input
-                          type="text"
-                          value={doc.schedule}
-                          aria-label="Doctor schedule"
-                          onChange={(e) => {
-                            const next = [...draftClinic.doctors];
-                            next[idx] = { ...doc, schedule: e.target.value };
-                            setDraftClinic({ ...draftClinic, doctors: next });
-                          }}
-                          className="h-9 px-2.5 rounded-lg border border-slate-300 text-xs"
-                        />
-                        <button
-                          type="button"
-                          aria-label={`Remove ${doc.name}`}
-                          onClick={() =>
-                            setDraftClinic({
-                              ...draftClinic,
-                              doctors: draftClinic.doctors.filter((_, i) => i !== idx),
-                            })
-                          }
-                          className="h-9 w-9 inline-flex items-center justify-center rounded-lg text-slate-500 hover:text-rose-700 hover:bg-rose-50"
-                        >
-                          <Trash2 className="w-4 h-4" aria-hidden="true" />
-                        </button>
+                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1.2fr_1.2fr_auto] gap-2 items-center">
+                          <input
+                            type="text"
+                            value={doc.name}
+                            placeholder="Doctor Name"
+                            aria-label="Doctor name"
+                            onChange={(e) => {
+                              const next = [...draftClinic.doctors];
+                              next[idx] = { ...doc, name: e.target.value };
+                              setDraftClinic({ ...draftClinic, doctors: next });
+                            }}
+                            className="h-9 px-2.5 rounded-lg border border-slate-300 bg-white text-xs font-medium"
+                          />
+                          <input
+                            type="text"
+                            value={doc.qualification}
+                            placeholder="Qualifications (BDS / MDS)"
+                            aria-label="Doctor qualification"
+                            onChange={(e) => {
+                              const next = [...draftClinic.doctors];
+                              next[idx] = { ...doc, qualification: e.target.value };
+                              setDraftClinic({ ...draftClinic, doctors: next });
+                            }}
+                            className="h-9 px-2.5 rounded-lg border border-slate-300 bg-white text-xs"
+                          />
+                          <input
+                            type="text"
+                            value={doc.registrationNumber || ''}
+                            placeholder="Registration Details (e.g. TSDC Reg. No.)"
+                            aria-label="Doctor registration details"
+                            onChange={(e) => {
+                              const next = [...draftClinic.doctors];
+                              next[idx] = { ...doc, registrationNumber: e.target.value };
+                              setDraftClinic({ ...draftClinic, doctors: next });
+                            }}
+                            className="h-9 px-2.5 rounded-lg border border-slate-300 bg-white text-xs tabular-nums"
+                          />
+                          <button
+                            type="button"
+                            aria-label={`Remove ${doc.name}`}
+                            onClick={() =>
+                              setDraftClinic({
+                                ...draftClinic,
+                                doctors: draftClinic.doctors.filter((_, i) => i !== idx),
+                              })
+                            }
+                            className="h-9 w-9 inline-flex items-center justify-center rounded-lg text-slate-500 hover:text-rose-700 hover:bg-rose-50"
+                          >
+                            <Trash2 className="w-4 h-4" aria-hidden="true" />
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <input
+                            type="text"
+                            value={doc.specialty}
+                            placeholder="Primary Specialisation"
+                            aria-label="Doctor specialty"
+                            onChange={(e) => {
+                              const next = [...draftClinic.doctors];
+                              next[idx] = { ...doc, specialty: e.target.value };
+                              setDraftClinic({ ...draftClinic, doctors: next });
+                            }}
+                            className="h-9 px-2.5 rounded-lg border border-slate-300 bg-white text-xs"
+                          />
+                          <input
+                            type="text"
+                            value={(doc.expertise || []).join(', ')}
+                            placeholder="Clinical Expertise (comma-separated)"
+                            aria-label="Doctor clinical expertise"
+                            onChange={(e) => {
+                              const next = [...draftClinic.doctors];
+                              next[idx] = {
+                                ...doc,
+                                expertise: e.target.value
+                                  .split(',')
+                                  .map((item) => item.trim())
+                                  .filter(Boolean),
+                              };
+                              setDraftClinic({ ...draftClinic, doctors: next });
+                            }}
+                            className="h-9 px-2.5 rounded-lg border border-slate-300 bg-white text-xs"
+                          />
+                          <input
+                            type="text"
+                            value={doc.schedule}
+                            placeholder="Consultation Timings"
+                            aria-label="Doctor schedule"
+                            onChange={(e) => {
+                              const next = [...draftClinic.doctors];
+                              next[idx] = { ...doc, schedule: e.target.value };
+                              setDraftClinic({ ...draftClinic, doctors: next });
+                            }}
+                            className="h-9 px-2.5 rounded-lg border border-slate-300 bg-white text-xs tabular-nums"
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>

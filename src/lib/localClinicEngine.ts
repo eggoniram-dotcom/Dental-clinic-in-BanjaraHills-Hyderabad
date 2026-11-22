@@ -447,7 +447,7 @@ function answerFromClinicFile(
   });
 
   const asksDoctorsGeneral =
-    /\b(doctors?|dentists?|specialists?|orthodontist|endodontist|surgeon|staff|team|who\s+is)\b/i.test(
+    /\b(doctors?|dentists?|specialists?|orthodontist|endodontist|surgeon|staff|team|who\s+is|qualification|qualifications|bds|mds|registration|tsdc|dci|credentials?)\b/i.test(
       lower,
     ) || /evaru|డాక్టర్|వైద్యుల|వైద్యుడ|డెంటిస్ట్|डॉक्टर|चिकित्सक|डेंटिस्ट/i.test(message);
 
@@ -573,7 +573,10 @@ function answerFromClinicFile(
 
   if (matchedDoctors.length > 0) {
     const list = matchedDoctors
-      .map((d) => `• ${d.name} (${d.qualification}) — ${d.specialty}. Timings: ${d.schedule}`)
+      .map(
+        (d) =>
+          `• ${d.name} (${d.qualification})${d.registrationNumber ? ` | ${d.registrationNumber}` : ''} — ${d.specialty}. Timings: ${d.schedule}`,
+      )
       .join('\n');
     sections.push(
       lang === 'hi'
@@ -588,7 +591,10 @@ function answerFromClinicFile(
       return { matched: false, reply: formatUnanswered(clinicData, lang) };
     }
     const list = clinicData.doctors
-      .map((d) => `• ${d.name} (${d.qualification}) — ${d.specialty} | ${d.schedule}`)
+      .map(
+        (d) =>
+          `• ${d.name} (${d.qualification})${d.registrationNumber ? ` | ${d.registrationNumber}` : ''} — ${d.specialty} | ${d.schedule}`,
+      )
       .join('\n');
     sections.push(
       lang === 'hi'
