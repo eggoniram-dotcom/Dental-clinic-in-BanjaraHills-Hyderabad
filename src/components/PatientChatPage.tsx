@@ -324,135 +324,157 @@ export function PatientChatPage({
   return (
     <div className="bg-[#f8faf9] text-slate-900">
       {/* ============================================================
-          SECTION 1: HERO — Professional Clinic Photograph, Headline,
-          Book Appointment & WhatsApp Buttons, Trust Indicators
+          SECTION 1: HERO — Headline "Your Smile Deserves Expert Care",
+          Banjara Hills Hyderabad, Book Appointment + Call + WhatsApp,
+          Real Clinic & Dentist Photographs, Grounded Proof Cards
          ============================================================ */}
-      <section className="border-b border-emerald-950/10 bg-white">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-8 pb-8 sm:pt-12 sm:pb-12">
+      <section className="border-b border-emerald-950/10 bg-white overflow-x-clip">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-8 pb-10 sm:pt-12 sm:pb-14">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-stretch">
-            <div className="lg:col-span-6 flex flex-col justify-center">
-              <p className="text-xs sm:text-sm font-medium text-emerald-800 tracking-wide">
-                Road No. 12, Banjara Hills · Hyderabad
-              </p>
+            {/* Left Editorial Column */}
+            <div className="lg:col-span-6 flex flex-col justify-between gap-8 py-1">
+              <div>
+                <p className="text-xs sm:text-sm font-medium text-emerald-800 tracking-wide">
+                  Banjara Hills, Hyderabad · Road No. 12
+                </p>
 
-              <h1
-                className="mt-3 font-bold tracking-tight text-emerald-950 leading-[1.08]"
-                style={{
-                  fontSize: 'clamp(2.15rem, 4vw, 3.45rem)',
-                  textWrap: 'balance',
-                }}
-              >
-                Your Trusted Dental Care in Banjara Hills
-              </h1>
-
-              <p className="mt-4 text-base text-slate-600 leading-relaxed max-w-[54ch]">
-                Personalised dental care in Banjara Hills—combining MDS specialists in root canals,
-                dental implants, and orthodontics with published clinic tariffs, Class-B autoclave
-                sterilisation, and instant front-desk support in English, हिन्दी, and తెలుగు.
-              </p>
-
-              <div className="mt-7 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => scrollToAppointmentForm()}
-                  className="inline-flex items-center justify-center gap-2 min-h-[46px] px-6 py-3 rounded-xl bg-emerald-900 text-white text-sm font-semibold hover:bg-emerald-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                <h1
+                  className="mt-3 font-bold tracking-tight text-emerald-950 leading-[1.06]"
+                  style={{
+                    fontSize: 'clamp(2.3rem, 4.3vw, 3.7rem)',
+                    textWrap: 'balance',
+                  }}
                 >
-                  <Calendar className="w-4 h-4" aria-hidden="true" />
-                  <span>Book Appointment</span>
-                </button>
+                  Your Smile Deserves Expert Care
+                </h1>
 
-                <a
-                  href={whatsAppHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 min-h-[46px] px-5 py-3 rounded-xl border border-emerald-900/20 bg-white text-emerald-950 text-sm font-semibold hover:bg-emerald-50 hover:border-emerald-900/35 transition-colors whitespace-nowrap shrink-0"
-                >
-                  <MessageCircle className="w-4 h-4 text-emerald-700" aria-hidden="true" />
-                  <span>WhatsApp Us</span>
-                </a>
+                <p className="mt-4 text-base text-slate-600 leading-relaxed max-w-[52ch]">
+                  Personalised specialist dental care in{' '}
+                  <span className="font-medium text-slate-800">Banjara Hills, Hyderabad</span>. We
+                  combine preventive dentistry, micro-endodontics, implants, and clear aligners
+                  with published clinic tariffs and Class-B autoclave sterilisation.
+                </p>
+
+                {/* Primary & Direct Contact CTAs: Book Appointment + Call + WhatsApp */}
+                <div className="mt-7 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => scrollToAppointmentForm()}
+                    className="inline-flex items-center justify-center gap-2 min-h-[48px] px-7 py-3 rounded-xl bg-emerald-900 text-white text-sm font-semibold shadow-sm hover:bg-emerald-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  >
+                    <Calendar className="w-4 h-4" aria-hidden="true" />
+                    <span>Book Appointment</span>
+                  </button>
+
+                  <a
+                    href={`tel:${clinicData.phone.replace(/\s+/g, '')}`}
+                    className="inline-flex items-center justify-center gap-2 min-h-[48px] px-5 py-3 rounded-xl border border-emerald-950/15 bg-white text-emerald-950 text-sm font-semibold hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0"
+                  >
+                    <Phone className="w-4 h-4 text-emerald-800" aria-hidden="true" />
+                    <span>Call Clinic</span>
+                  </a>
+
+                  <a
+                    href={whatsAppHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 min-h-[48px] px-5 py-3 rounded-xl border border-emerald-900/20 bg-emerald-50/80 text-emerald-950 text-sm font-semibold hover:bg-emerald-100 transition-colors whitespace-nowrap shrink-0"
+                  >
+                    <MessageCircle className="w-4 h-4 text-emerald-700" aria-hidden="true" />
+                    <span>WhatsApp</span>
+                  </a>
+                </div>
               </div>
 
-              <div className="mt-6 pt-5 border-t border-slate-100 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-500">
-                <span className="tabular-nums">{clinicData.timings?.weekdays}</span>
-                <span aria-hidden="true">·</span>
-                <a
-                  href={`tel:${clinicData.phone.replace(/\s+/g, '')}`}
-                  className="tabular-nums hover:text-emerald-900 underline-offset-2 hover:underline"
+              {/* Clean Airy Two-Card Proof Row (100% clinic-file grounded) */}
+              <div className="space-y-4">
+                <div
+                  aria-label="Clinic highlights"
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-3.5"
                 >
-                  Front Desk: {clinicData.phone}
-                </a>
-                <span aria-hidden="true">·</span>
-                <span>Walk-ins welcome for urgent pain</span>
+                  <div className="rounded-2xl bg-[#f4f8f6] border border-emerald-950/8 p-4 sm:p-5">
+                    <p className="text-2xl sm:text-3xl font-bold tracking-tight text-emerald-900 tabular-nums">
+                      {clinicData.doctors.length} Specialists
+                    </p>
+                    <p className="mt-1.5 text-xs text-slate-600 leading-relaxed">
+                      MDS Endodontics, Oral Surgery, Orthodontics &amp; preventive family dentistry
+                      under one roof.
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl bg-[#f8faf9] border border-emerald-950/8 p-4 sm:p-5">
+                    <p className="text-2xl sm:text-3xl font-bold tracking-tight text-emerald-900 tabular-nums">
+                      {consultFee} Consult
+                    </p>
+                    <p className="mt-1.5 text-xs text-slate-600 leading-relaxed">
+                      Published tariffs, Class-B sterilisation, ground-floor access &amp; free
+                      Road No. 12 valet parking.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 pt-1">
+                  <span className="tabular-nums">{clinicData.timings?.weekdays}</span>
+                  <span aria-hidden="true">·</span>
+                  <a
+                    href={`tel:${clinicData.emergencyPhone.replace(/\s+/g, '')}`}
+                    className="font-medium text-rose-700 hover:underline tabular-nums"
+                  >
+                    24/7 Emergency: {clinicData.emergencyPhone}
+                  </a>
+                </div>
               </div>
             </div>
 
-            <div className="lg:col-span-6">
-              <div className="relative h-full min-h-[250px] sm:min-h-[340px] lg:min-h-[410px] rounded-2xl overflow-hidden border border-emerald-950/10 bg-emerald-950/5">
+            {/* Right Visual Column: Sculpted Real Clinic Suite + Lead Dentist Portrait */}
+            <div className="lg:col-span-6 flex flex-col gap-3">
+              <div className="relative flex-1 min-h-[280px] sm:min-h-[380px] lg:min-h-[460px] rounded-3xl lg:rounded-tl-[4.25rem] lg:rounded-bl-[2.25rem] lg:rounded-r-3xl overflow-hidden border border-emerald-950/10 bg-emerald-950/5">
                 {!brokenImages.heroSuite ? (
                   <img
                     src={CLINIC_IMAGES.heroSuite}
-                    alt="Sunlit modern dental treatment suite at Dentistae Dental Care in Banjara Hills, Hyderabad"
+                    alt="Modern sunlit dental treatment suite at Dentistae Dental Care in Banjara Hills, Hyderabad"
                     referrerPolicy="no-referrer"
                     onError={() => markImageBroken('heroSuite')}
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full min-h-[260px] flex flex-col items-center justify-center bg-gradient-to-br from-emerald-50 to-stone-100 text-emerald-900 p-6 text-center">
+                  <div className="w-full h-full min-h-[280px] flex flex-col items-center justify-center bg-gradient-to-br from-emerald-50 to-stone-100 text-emerald-900 p-6 text-center">
                     <Stethoscope className="w-10 h-10 mb-3 opacity-75" aria-hidden="true" />
                     <p className="text-base font-semibold">{clinicData.clinicName}</p>
                     <p className="text-xs text-slate-600 mt-1">{clinicData.address}</p>
                   </div>
                 )}
 
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-5 pt-10 pb-4">
-                  <p className="text-xs sm:text-sm font-medium text-white">
-                    {clinicData.clinicName} · Plot 42, Road No. 12
-                  </p>
-                  <p className="text-xs text-white/80 mt-0.5">{clinicData.landmark}</p>
+                {/* Measured scrim + Lead Dentist Portrait Pairing */}
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 sm:p-5">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden border-2 border-white/90 bg-emerald-950/20 shrink-0">
+                      {!brokenImages.heroDentist ? (
+                        <img
+                          src={CLINIC_IMAGES.docAnanya}
+                          alt={`${clinicData.doctors[0]?.name || 'Lead Dentist'} at Dentistae Dental Care Banjara Hills`}
+                          referrerPolicy="no-referrer"
+                          onError={() => markImageBroken('heroDentist')}
+                          className="w-full h-full object-cover object-top"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-emerald-900 text-white">
+                          <Stethoscope className="w-5 h-5" aria-hidden="true" />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 text-white">
+                      <p className="text-xs sm:text-sm font-semibold truncate">
+                        {clinicData.doctors[0]?.name || 'Dr. Ananya Reddy'} &amp; Specialist Team
+                      </p>
+                      <p className="text-xs text-white/85 truncate mt-0.5">
+                        {clinicData.clinicName} · Plot 42, Road No. 12, Banjara Hills
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* 4-Column Trust Indicators Strip */}
-          <div
-            aria-label="Why choose our clinic"
-            className="mt-8 sm:mt-10 pt-6 border-t border-emerald-950/10 grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5"
-          >
-            <div>
-              <p className="text-lg sm:text-xl font-bold text-emerald-950 tabular-nums">
-                {clinicData.doctors.length} MDS &amp; BDS Specialists
-              </p>
-              <p className="mt-1 text-xs sm:text-sm text-slate-600 leading-snug">
-                Experienced dentists in endodontics, oral surgery, orthodontics &amp; preventive care
-              </p>
-            </div>
-
-            <div>
-              <p className="text-lg sm:text-xl font-bold text-emerald-950">
-                Class-B Autoclave
-              </p>
-              <p className="mt-1 text-xs sm:text-sm text-slate-600 leading-snug">
-                Modern digital RVG X-rays, 3D intraoral scanning &amp; hospital-grade sterilisation
-              </p>
-            </div>
-
-            <div>
-              <p className="text-lg sm:text-xl font-bold text-emerald-950 tabular-nums">
-                Consultation {consultFee}
-              </p>
-              <p className="mt-1 text-xs sm:text-sm text-slate-600 leading-snug">
-                Published clinic tariffs · Itemised GST bills for OPD reimbursement claims
-              </p>
-            </div>
-
-            <div>
-              <p className="text-lg sm:text-xl font-bold text-emerald-950">
-                Ground-Floor &amp; Valet
-              </p>
-              <p className="mt-1 text-xs sm:text-sm text-slate-600 leading-snug">
-                Step-free wheelchair access · Complimentary Road No. 12 valet parking
-              </p>
             </div>
           </div>
         </div>
