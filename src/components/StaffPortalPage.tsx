@@ -1085,6 +1085,215 @@ export function StaffPortalPage({
                     />
                   </div>
                 </div>
+
+                {/* Verified Google Reviews (With Source Links Only — No Fabricated Reviews) */}
+                <div className="border-t border-slate-100 pt-5 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900">
+                        Verified Google Reviews (With Source Links)
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Only paste genuine patient reviews copied from Google Maps along with their
+                        direct review source URL. Leave empty to link patients directly to Google Maps.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const existing = draftClinic.googleReviews?.reviews ?? [];
+                        setDraftClinic({
+                          ...draftClinic,
+                          googleReviews: {
+                            placeUrl: draftClinic.googleReviews?.placeUrl ?? '',
+                            reviews: [
+                              ...existing,
+                              {
+                                id: `grev-${Date.now()}`,
+                                authorName: '',
+                                rating: 5,
+                                dateLabel: '',
+                                treatmentContext: '',
+                                quote: '',
+                                sourceUrl: '',
+                              },
+                            ],
+                          },
+                        });
+                      }}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 min-h-[36px] rounded-lg border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                      <span>Add Verified Google Review</span>
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Google Business Profile / Maps Reviews URL (Optional)
+                    </label>
+                    <input
+                      type="url"
+                      value={draftClinic.googleReviews?.placeUrl ?? ''}
+                      placeholder="https://maps.google.com/?cid=..."
+                      onChange={(e) =>
+                        setDraftClinic({
+                          ...draftClinic,
+                          googleReviews: {
+                            placeUrl: e.target.value,
+                            reviews: draftClinic.googleReviews?.reviews ?? [],
+                          },
+                        })
+                      }
+                      className="w-full h-9 px-3 rounded-lg border border-slate-300 text-xs"
+                    />
+                  </div>
+
+                  {(draftClinic.googleReviews?.reviews ?? []).length > 0 && (
+                    <div className="space-y-3">
+                      {(draftClinic.googleReviews?.reviews ?? []).map((rev, idx) => (
+                        <div
+                          key={rev.id}
+                          className="border border-slate-200 rounded-xl p-3 space-y-2 bg-slate-50/40"
+                        >
+                          <div className="grid grid-cols-1 sm:grid-cols-[1fr_100px_1fr_1fr_auto] gap-2 items-center">
+                            <input
+                              type="text"
+                              value={rev.authorName}
+                              placeholder="Reviewer Name"
+                              aria-label="Reviewer name"
+                              onChange={(e) => {
+                                const next = [...(draftClinic.googleReviews?.reviews ?? [])];
+                                next[idx] = { ...rev, authorName: e.target.value };
+                                setDraftClinic({
+                                  ...draftClinic,
+                                  googleReviews: {
+                                    placeUrl: draftClinic.googleReviews?.placeUrl ?? '',
+                                    reviews: next,
+                                  },
+                                });
+                              }}
+                              className="h-9 px-2.5 rounded-lg border border-slate-300 bg-white text-xs"
+                            />
+                            <select
+                              value={rev.rating}
+                              aria-label="Review star rating"
+                              onChange={(e) => {
+                                const next = [...(draftClinic.googleReviews?.reviews ?? [])];
+                                next[idx] = { ...rev, rating: Number(e.target.value) };
+                                setDraftClinic({
+                                  ...draftClinic,
+                                  googleReviews: {
+                                    placeUrl: draftClinic.googleReviews?.placeUrl ?? '',
+                                    reviews: next,
+                                  },
+                                });
+                              }}
+                              className="h-9 px-2 rounded-lg border border-slate-300 bg-white text-xs tabular-nums"
+                            >
+                              {[5, 4, 3, 2, 1].map((n) => (
+                                <option key={n} value={n}>
+                                  {n} ★
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              type="text"
+                              value={rev.dateLabel}
+                              placeholder="Date (e.g. Oct 2025)"
+                              aria-label="Review date"
+                              onChange={(e) => {
+                                const next = [...(draftClinic.googleReviews?.reviews ?? [])];
+                                next[idx] = { ...rev, dateLabel: e.target.value };
+                                setDraftClinic({
+                                  ...draftClinic,
+                                  googleReviews: {
+                                    placeUrl: draftClinic.googleReviews?.placeUrl ?? '',
+                                    reviews: next,
+                                  },
+                                });
+                              }}
+                              className="h-9 px-2.5 rounded-lg border border-slate-300 bg-white text-xs"
+                            />
+                            <input
+                              type="text"
+                              value={rev.treatmentContext || ''}
+                              placeholder="Visit Context (Optional)"
+                              aria-label="Review treatment context"
+                              onChange={(e) => {
+                                const next = [...(draftClinic.googleReviews?.reviews ?? [])];
+                                next[idx] = { ...rev, treatmentContext: e.target.value };
+                                setDraftClinic({
+                                  ...draftClinic,
+                                  googleReviews: {
+                                    placeUrl: draftClinic.googleReviews?.placeUrl ?? '',
+                                    reviews: next,
+                                  },
+                                });
+                              }}
+                              className="h-9 px-2.5 rounded-lg border border-slate-300 bg-white text-xs"
+                            />
+                            <button
+                              type="button"
+                              aria-label="Remove review"
+                              onClick={() => {
+                                const next = (draftClinic.googleReviews?.reviews ?? []).filter(
+                                  (_, i) => i !== idx,
+                                );
+                                setDraftClinic({
+                                  ...draftClinic,
+                                  googleReviews: {
+                                    placeUrl: draftClinic.googleReviews?.placeUrl ?? '',
+                                    reviews: next,
+                                  },
+                                });
+                              }}
+                              className="h-9 w-9 inline-flex items-center justify-center rounded-lg text-slate-500 hover:text-rose-700 hover:bg-rose-50"
+                            >
+                              <Trash2 className="w-4 h-4" aria-hidden="true" />
+                            </button>
+                          </div>
+                          <textarea
+                            rows={2}
+                            value={rev.quote}
+                            placeholder="Exact Google review text..."
+                            aria-label="Review text"
+                            onChange={(e) => {
+                              const next = [...(draftClinic.googleReviews?.reviews ?? [])];
+                              next[idx] = { ...rev, quote: e.target.value };
+                              setDraftClinic({
+                                ...draftClinic,
+                                googleReviews: {
+                                  placeUrl: draftClinic.googleReviews?.placeUrl ?? '',
+                                  reviews: next,
+                                },
+                              });
+                            }}
+                            className="w-full p-2.5 rounded-lg border border-slate-300 bg-white text-xs"
+                          />
+                          <input
+                            type="url"
+                            value={rev.sourceUrl}
+                            placeholder="Direct Google Maps review source URL (https://maps.google.com/...)"
+                            aria-label="Google review source URL"
+                            onChange={(e) => {
+                              const next = [...(draftClinic.googleReviews?.reviews ?? [])];
+                              next[idx] = { ...rev, sourceUrl: e.target.value };
+                              setDraftClinic({
+                                ...draftClinic,
+                                googleReviews: {
+                                  placeUrl: draftClinic.googleReviews?.placeUrl ?? '',
+                                  reviews: next,
+                                },
+                              });
+                            }}
+                            className="w-full h-9 px-2.5 rounded-lg border border-slate-300 bg-white text-xs"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

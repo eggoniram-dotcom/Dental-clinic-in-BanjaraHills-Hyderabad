@@ -19,6 +19,16 @@ export interface ServicePrice {
   notes?: string;
 }
 
+export interface GoogleReviewItem {
+  id: string;
+  authorName: string;
+  rating: number;
+  dateLabel: string;
+  treatmentContext?: string;
+  quote: string;
+  sourceUrl: string;
+}
+
 export interface ClinicData {
   clinicName: string;
   tagline: string;
@@ -40,6 +50,10 @@ export interface ClinicData {
     partners: string[];
   };
   parkingAndAccess: string;
+  googleReviews?: {
+    placeUrl?: string;
+    reviews: GoogleReviewItem[];
+  };
   updatedAt: string;
 }
 

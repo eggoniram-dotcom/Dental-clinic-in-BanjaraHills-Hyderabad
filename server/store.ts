@@ -85,6 +85,10 @@ export function normalizeClinicData(input: Partial<ClinicData> | null | undefine
       partners: Array.isArray(input.insurance?.partners) ? input.insurance.partners : base.insurance.partners,
     },
     parkingAndAccess: typeof input.parkingAndAccess === 'string' ? input.parkingAndAccess : base.parkingAndAccess,
+    googleReviews: {
+      placeUrl: typeof input.googleReviews?.placeUrl === 'string' ? input.googleReviews.placeUrl : '',
+      reviews: Array.isArray(input.googleReviews?.reviews) ? input.googleReviews.reviews : [],
+    },
     updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : new Date().toISOString(),
   };
 }

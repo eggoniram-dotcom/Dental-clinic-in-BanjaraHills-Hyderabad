@@ -10,10 +10,13 @@ import {
   ExternalLink,
   MapPin,
   MessageCircle,
+  Minus,
   Navigation,
   Phone,
+  Plus,
   Send,
   ShieldCheck,
+  Star,
   Stethoscope,
   X,
 } from 'lucide-react';
@@ -149,6 +152,8 @@ export function PatientChatPage({
   const [fbComment, setFbComment] = useState('');
   const [fbConsent, setFbConsent] = useState(false);
   const [fbNotice, setFbNotice] = useState<string | null>(null);
+  const [openHygieneIndex, setOpenHygieneIndex] = useState<number | null>(0);
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
 
   const autoAskedRef = useRef(false);
   const chatSectionRef = useRef<HTMLElement | null>(null);
@@ -1312,23 +1317,298 @@ export function PatientChatPage({
       </section>
 
       {/* ============================================================
-          SECTION 5: CLINIC GALLERY & CONSENT-BASED PATIENT FEEDBACK
+          SECTION 5: PATIENT TRUST SECTION
+          - Genuine Google Reviews with Source Links (Zero Fabrication)
+          - Real Clinic Photographs
+          - Equipment & Hygiene Information
+          - Frequently Asked Questions (Live Clinic-File Grounded)
          ============================================================ */}
       <section
         id="gallery-reviews"
-        aria-label="Clinic gallery and patient feedback"
+        aria-label="Patient trust, clinic photographs, hygiene standards and FAQs"
         className="border-t border-emerald-950/10 bg-white scroll-mt-16"
       >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 space-y-12">
-          {/* Clinic Gallery */}
+        {/* 5A. Genuine Google Reviews Band (Warm serene surface, zero invented reviews/ratings) */}
+        <div className="bg-[#faf8f4] border-b border-emerald-950/10">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
+            {(() => {
+              const verifiedGoogleReviews = (clinicData.googleReviews?.reviews ?? []).filter(
+                (r) =>
+                  r.authorName.trim() &&
+                  r.quote.trim() &&
+                  /^https?:\/\//i.test(r.sourceUrl.trim()),
+              );
+              const googlePlaceUrl =
+                clinicData.googleReviews?.placeUrl &&
+                /^https?:\/\//i.test(clinicData.googleReviews.placeUrl.trim())
+                  ? clinicData.googleReviews.placeUrl.trim()
+                  : mapsDirectionsHref;
+
+              return (
+                <div className="space-y-10">
+                  <div className="max-w-2xl mx-auto text-center">
+                    <p className="text-xs sm:text-sm font-medium text-emerald-800">
+                      Patient Trust &amp; Verified Sources · Banjara Hills
+                    </p>
+                    <h2
+                      className="mt-2 text-2xl sm:text-4xl font-bold tracking-tight text-emerald-950 leading-tight"
+                      style={{ textWrap: 'balance' }}
+                    >
+                      Trusted By Patients.
+                      <br />
+                      Built on Clinical Transparency.
+                    </h2>
+                    <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed">
+                      We never publish fabricated testimonials, invented star ratings, or unconsented
+                      clinical claims. Every review shown here links directly to its original Google
+                      Maps source.
+                    </p>
+                  </div>
+
+                  {/* Verified Google Reviews Cards (if linked by staff) OR Honest Zero-Fabrication Google Maps Link Box */}
+                  {verifiedGoogleReviews.length > 0 ? (
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        {verifiedGoogleReviews.map((rev) => {
+                          const safeRating = Math.min(5, Math.max(1, Math.round(rev.rating || 5)));
+                          return (
+                            <article
+                              key={rev.id}
+                              className="rounded-2xl bg-white border border-emerald-950/10 p-6 flex flex-col justify-between gap-5"
+                            >
+                              <div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span
+                                    aria-hidden="true"
+                                    className="text-3xl font-serif leading-none text-amber-500 select-none"
+                                  >
+                                    “
+                                  </span>
+                                  <div
+                                    className="flex items-center gap-0.5 text-amber-500"
+                                    aria-label={`${safeRating} out of 5 stars on Google`}
+                                  >
+                                    {Array.from({ length: safeRating }).map((_, i) => (
+                                      <Star
+                                        key={i}
+                                        className="w-3.5 h-3.5 fill-amber-500 text-amber-500"
+                                        aria-hidden="true"
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                                <p className="mt-3 text-sm text-slate-700 leading-relaxed">
+                                  {rev.quote}
+                                </p>
+                              </div>
+
+                              <div className="pt-4 border-t border-slate-100 flex items-end justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-bold text-emerald-950 truncate">
+                                    {rev.authorName}
+                                  </p>
+                                  <p className="text-xs text-slate-500 truncate mt-0.5">
+                                    {[rev.treatmentContext, rev.dateLabel]
+                                      .filter(Boolean)
+                                      .join(' · ') || 'Google Maps Patient Review'}
+                                  </p>
+                                </div>
+                                <a
+                                  href={rev.sourceUrl.trim()}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-900 hover:underline whitespace-nowrap shrink-0"
+                                >
+                                  <span>Google Source</span>
+                                  <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+                                </a>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+
+                      <div className="flex justify-center">
+                        <a
+                          href={googlePlaceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2.5 min-h-[44px] px-5 py-2.5 rounded-xl bg-white border border-emerald-950/15 text-xs sm:text-sm font-semibold text-emerald-950 hover:bg-emerald-50 transition-colors"
+                        >
+                          <span>Read All Verified Google Reviews on Google Maps</span>
+                          <ExternalLink className="w-4 h-4 text-emerald-700" aria-hidden="true" />
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl bg-white border border-emerald-950/10 p-6 sm:p-8">
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                        <div className="lg:col-span-6 space-y-4">
+                          <div className="flex items-start gap-3">
+                            <ShieldCheck
+                              className="w-5 h-5 text-emerald-800 shrink-0 mt-0.5"
+                              aria-hidden="true"
+                            />
+                            <div>
+                              <h3 className="text-lg font-bold text-emerald-950">
+                                Genuine Google Reviews — Verified at the Source
+                              </h3>
+                              <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">
+                                To keep patient trust honest, this clinic website does not display
+                                placeholder testimonials or synthetic star averages. View real,
+                                unfiltered patient reviews directly on Google Maps, or verify
+                                clinician registration details above.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-3 pt-1">
+                            <a
+                              href={googlePlaceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl bg-emerald-900 text-white text-sm font-semibold hover:bg-emerald-800 transition-colors whitespace-nowrap"
+                            >
+                              <span>Read Reviews on Google Maps</span>
+                              <ExternalLink className="w-4 h-4" aria-hidden="true" />
+                            </a>
+
+                            {onNavigateStaff && (
+                              <button
+                                type="button"
+                                onClick={onNavigateStaff}
+                                className="inline-flex items-center gap-1.5 min-h-[44px] px-4 py-2.5 rounded-xl border border-emerald-950/15 bg-white text-xs sm:text-sm font-semibold text-emerald-950 hover:bg-emerald-50 transition-colors whitespace-nowrap cursor-pointer"
+                              >
+                                <span>Staff: Link Verified Google Reviews</span>
+                                <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                              </button>
+                            )}
+                          </div>
+
+                          {feedbackItems.length > 0 && (
+                            <div className="pt-4 border-t border-slate-100 space-y-3">
+                              <p className="text-xs font-semibold text-slate-500">
+                                Consented Patient Feedback Submitted on This Device
+                              </p>
+                              {feedbackItems.map((fb) => (
+                                <div
+                                  key={fb.id}
+                                  className="rounded-xl bg-[#faf8f4] border border-emerald-950/10 p-4"
+                                >
+                                  <p className="text-sm text-slate-700 leading-relaxed">
+                                    “{fb.comment}”
+                                  </p>
+                                  <p className="mt-2 text-xs text-slate-500">
+                                    <span className="font-semibold text-emerald-950">
+                                      {fb.name}
+                                    </span>{' '}
+                                    · {fb.visitType} · {fb.submittedAt}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="lg:col-span-6">
+                          <form
+                            onSubmit={handleFeedbackSubmit}
+                            className="rounded-2xl bg-[#f8faf9] border border-emerald-950/10 p-5 sm:p-6 space-y-4"
+                          >
+                            <div>
+                              <h3 className="text-base font-bold text-emerald-950">
+                                Share Your Visit Feedback (With Explicit Consent)
+                              </h3>
+                              <p className="text-xs text-slate-600 mt-1">
+                                Visited our Banjara Hills clinic recently? Share an honest note with
+                                our care team.
+                              </p>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <input
+                                type="text"
+                                value={fbName}
+                                onChange={(e) => setFbName(e.target.value)}
+                                placeholder="Your name"
+                                aria-label="Your name for feedback"
+                                className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
+                              />
+                              <select
+                                value={fbVisitType}
+                                onChange={(e) => setFbVisitType(e.target.value)}
+                                aria-label="Visit type"
+                                className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
+                              >
+                                {clinicData.services.map((srv) => (
+                                  <option key={srv.id} value={srv.name}>
+                                    {srv.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <textarea
+                              rows={3}
+                              value={fbComment}
+                              onChange={(e) => setFbComment(e.target.value)}
+                              placeholder="Share how your consultation or visit went..."
+                              aria-label="Feedback note"
+                              className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
+                            />
+
+                            <label className="flex items-start gap-2.5 text-xs text-slate-600 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={fbConsent}
+                                onChange={(e) => setFbConsent(e.target.checked)}
+                                className="mt-0.5 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
+                              />
+                              <span>
+                                I consent to sharing this feedback with {clinicData.clinicName} and
+                                understand no private clinical details should be included.
+                              </span>
+                            </label>
+
+                            {fbNotice && (
+                              <p className="text-xs font-medium text-emerald-900 flex items-center gap-1.5">
+                                <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
+                                <span>{fbNotice}</span>
+                              </p>
+                            )}
+
+                            <button
+                              type="submit"
+                              className="inline-flex items-center justify-center min-h-[42px] px-5 py-2 rounded-xl bg-emerald-900 text-white text-xs sm:text-sm font-semibold hover:bg-emerald-800 transition-colors cursor-pointer"
+                            >
+                              Submit Feedback
+                            </button>
+                          </form>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+
+        {/* 5B. Real Clinic Photographs + Equipment & Hygiene + FAQs */}
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16 space-y-14">
+          {/* Real Clinic Photographs */}
           <div>
             <div className="max-w-2xl">
               <p className="text-xs sm:text-sm font-medium text-emerald-800">
                 Inside Our Road No. 12 Facility
               </p>
-              <h2 className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-emerald-950">
-                Clinic Environment &amp; Clinical Sterilisation Standards
-              </h2>
+              <h3 className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight text-emerald-950">
+                Real Clinic Photographs
+              </h3>
+              <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+                Explore our sunlit treatment suites, glass-visible sterilisation &amp; 3D
+                diagnostics bay, and step-free ground-floor reception in Banjara Hills.
+              </p>
             </div>
 
             <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -1338,21 +1618,21 @@ export function PatientChatPage({
                   src: CLINIC_IMAGES.heroSuite,
                   title: 'Sunlit Operatory Suite',
                   caption:
-                    'Private glass-partitioned treatment suites equipped for micro-endodontics and oral surgery.',
+                    'Private glass-partitioned treatment suites prepared with fresh disposable barriers before every consultation.',
                 },
                 {
                   key: 'gal-diag',
                   src: CLINIC_IMAGES.diagnosticsBay,
                   title: '3D Diagnostics & Class-B Autoclave Bay',
                   caption:
-                    'Glass-visible sterilisation protocol and 3D intraoral scanning for crowns and clear aligners.',
+                    'Dedicated Class-B vacuum autoclave sterilisation bay alongside digital RVG X-ray and 3D intraoral scanning.',
                 },
                 {
                   key: 'gal-reception',
                   src: CLINIC_IMAGES.reception,
-                  title: 'Calm Ground-Floor Reception',
+                  title: 'Ground-Floor Reception Lounge',
                   caption:
-                    'Step-free wheelchair entrance with complimentary valet parking on Road No. 12, Banjara Hills.',
+                    'Step-free wheelchair entrance with complimentary valet parking at Plot 42, Road No. 12, Banjara Hills.',
                 },
               ].map((photo) => (
                 <figure
@@ -1383,130 +1663,151 @@ export function PatientChatPage({
             </div>
           </div>
 
-          {/* Patient Reviews & Consent-First Feedback */}
-          <div className="pt-8 border-t border-emerald-950/10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            <div className="lg:col-span-6 space-y-5">
+          {/* Equipment & Hygiene Information + Frequently Asked Questions */}
+          <div className="pt-10 border-t border-emerald-950/10 grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+            {/* Left: Equipment & Hygiene Protocols (Clean expandable clinical cards) */}
+            <div className="lg:col-span-5 space-y-4">
               <div>
                 <p className="text-xs font-medium text-emerald-800">
-                  Ethical Patient Reviews &amp; Consent Policy
+                  Clinical Safety &amp; Modern Technology
                 </p>
                 <h3 className="mt-1 text-xl sm:text-2xl font-bold text-emerald-950 tracking-tight">
-                  Verified Patient Feedback &amp; Google Reviews
+                  Equipment &amp; Hygiene Standards
                 </h3>
-                <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-                  We never publish fabricated reviews or unconsented clinical before-and-after
-                  photographs. Approved clinical case records are reviewed privately during
-                  in-clinic consultations, and verified patient reviews are hosted directly on
-                  Google Maps.
+                <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">
+                  Every protocol below reflects standard equipment and infection-control practices
+                  listed in our clinic file—without exaggerated claims.
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
-                <a
-                  href={mapsDirectionsHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl border border-emerald-950/15 bg-white text-sm font-semibold text-emerald-950 hover:bg-emerald-50 transition-colors whitespace-nowrap"
-                >
-                  <span>View Clinic on Google Maps</span>
-                  <ExternalLink className="w-4 h-4 text-emerald-700" aria-hidden="true" />
-                </a>
-              </div>
-
-              {feedbackItems.length > 0 && (
-                <div className="pt-4 border-t border-slate-100 space-y-3">
-                  <p className="text-xs font-semibold text-slate-500">
-                    Consented Patient Notes Submitted on This Device
-                  </p>
-                  {feedbackItems.map((fb) => (
+              <div className="space-y-2.5">
+                {[
+                  {
+                    title: 'Class-B Autoclave Sterilisation',
+                    summary:
+                      'All reusable dental instruments follow Class-B vacuum autoclave sterilisation protocols in individually sealed pouches opened chairside.',
+                  },
+                  {
+                    title: 'Digital Dental X-Ray (RVG)',
+                    summary:
+                      'Single-tooth digital radiographs (₹300; complimentary for senior citizens aged 65+ with a paid consultation) allow immediate chairside review before recommending treatment.',
+                  },
+                  {
+                    title: '3D Intraoral Scanning & CAD/CAM Impressions',
+                    summary:
+                      'Digital scanning is used for Zirconia/ceramic crowns and Clear Aligners to measure bite fit accurately and reduce messy impression trays.',
+                  },
+                  {
+                    title: 'Chairside Hygiene & Ground-Floor Access',
+                    summary:
+                      'Surface disinfection and fresh disposable barriers between appointments, with step-free ground-floor wheelchair access and valet parking on Road No. 12.',
+                  },
+                ].map((item, idx) => {
+                  const isOpen = openHygieneIndex === idx;
+                  return (
                     <div
-                      key={fb.id}
-                      className="rounded-xl bg-[#f8faf9] border border-emerald-950/10 p-4"
+                      key={item.title}
+                      className="rounded-xl border border-emerald-950/10 bg-[#f8faf9] overflow-hidden"
                     >
-                      <p className="text-sm text-slate-700 leading-relaxed">“{fb.comment}”</p>
-                      <p className="mt-2 text-xs text-slate-500">
-                        <span className="font-semibold text-emerald-950">{fb.name}</span> ·{' '}
-                        {fb.visitType} · {fb.submittedAt}
-                      </p>
+                      <button
+                        type="button"
+                        aria-expanded={isOpen}
+                        onClick={() => setOpenHygieneIndex(isOpen ? null : idx)}
+                        className="w-full px-4 py-3.5 text-left flex items-center justify-between gap-3 cursor-pointer"
+                      >
+                        <span className="text-sm font-semibold text-emerald-950">
+                          {item.title}
+                        </span>
+                        <span className="w-6 h-6 rounded-full bg-emerald-900 text-white inline-flex items-center justify-center shrink-0">
+                          {isOpen ? (
+                            <Minus className="w-3.5 h-3.5" aria-hidden="true" />
+                          ) : (
+                            <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                          )}
+                        </span>
+                      </button>
+                      {isOpen && (
+                        <div className="px-4 pb-4 text-xs sm:text-sm text-slate-600 leading-relaxed border-t border-emerald-950/8 pt-3 bg-white">
+                          {item.summary}
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
-              )}
+                  );
+                })}
+              </div>
             </div>
 
-            <div className="lg:col-span-6">
-              <form
-                onSubmit={handleFeedbackSubmit}
-                className="rounded-2xl bg-[#f8faf9] border border-emerald-950/10 p-5 sm:p-6 space-y-4"
-              >
-                <div>
-                  <h3 className="text-base font-bold text-emerald-950">
-                    Share Your Visit Feedback (With Consent)
-                  </h3>
-                  <p className="text-xs text-slate-600 mt-1">
-                    Visited our Banjara Hills clinic recently? Leave a note for our care team.
-                  </p>
-                </div>
+            {/* Right: Frequently Asked Questions (100% Clinic-File Grounded Accordion) */}
+            <div className="lg:col-span-7 space-y-4">
+              <div>
+                <p className="text-xs font-medium text-emerald-800">
+                  Clear Answers From Our Clinic File
+                </p>
+                <h3 className="mt-1 text-xl sm:text-2xl font-bold text-emerald-950 tracking-tight">
+                  Frequently Asked Questions
+                </h3>
+                <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">
+                  Quick answers on timings, tariffs, OPD insurance reimbursement, parking, and
+                  appointments—synced live with our Banjara Hills clinic records.
+                </p>
+              </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <input
-                    type="text"
-                    value={fbName}
-                    onChange={(e) => setFbName(e.target.value)}
-                    placeholder="Your name"
-                    aria-label="Your name for feedback"
-                    className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
-                  />
-                  <select
-                    value={fbVisitType}
-                    onChange={(e) => setFbVisitType(e.target.value)}
-                    aria-label="Visit type"
-                    className="h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
-                  >
-                    {clinicData.services.map((srv) => (
-                      <option key={srv.id} value={srv.name}>
-                        {srv.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <textarea
-                  rows={3}
-                  value={fbComment}
-                  onChange={(e) => setFbComment(e.target.value)}
-                  placeholder="Share how your consultation or visit went..."
-                  aria-label="Feedback note"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
-                />
-
-                <label className="flex items-start gap-2.5 text-xs text-slate-600 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={fbConsent}
-                    onChange={(e) => setFbConsent(e.target.checked)}
-                    className="mt-0.5 rounded border-slate-300 text-emerald-800 focus:ring-emerald-700"
-                  />
-                  <span>
-                    I consent to sharing this feedback with {clinicData.clinicName} and understand
-                    no private clinical details should be included.
-                  </span>
-                </label>
-
-                {fbNotice && (
-                  <p className="text-xs font-medium text-emerald-900 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
-                    <span>{fbNotice}</span>
-                  </p>
-                )}
-
-                <button
-                  type="submit"
-                  className="inline-flex items-center justify-center min-h-[42px] px-5 py-2 rounded-xl bg-emerald-900 text-white text-xs sm:text-sm font-semibold hover:bg-emerald-800 transition-colors cursor-pointer"
-                >
-                  Submit Feedback
-                </button>
-              </form>
+              <div className="border-t border-emerald-950/10 divide-y divide-emerald-950/10">
+                {[
+                  {
+                    q: 'What are your clinic timings and consultation fee?',
+                    a: `${clinicData.timings?.weekdays}. ${clinicData.timings?.sunday}. ${clinicData.timings?.lunchBreak}. Standard Consultation & Oral Check-up fee is ${consultFee}, which includes an initial oral examination and written treatment plan.`,
+                  },
+                  {
+                    q: 'How does dental insurance reimbursement work at Dentistae?',
+                    a: `${clinicData.insurance.summary}${clinicData.insurance.partners.length > 0 ? ` Listed corporate OPD plans include: ${clinicData.insurance.partners.join(', ')}.` : ''}`,
+                  },
+                  {
+                    q: 'Do you accept walk-ins or urgent dental pain cases?',
+                    a: `Appointments are recommended so we can keep chair wait times minimal, and walk-ins are accommodated for urgent pain. For dental emergencies, please call our 24/7 Emergency Dental Line first at ${clinicData.emergencyPhone}.`,
+                  },
+                  {
+                    q: 'What is your cancellation, rescheduling, and pricing policy?',
+                    a: `Please inform our front desk at least 24 hours in advance to reschedule or cancel. Standard published clinic tariffs apply to all patients (our front desk does not offer ad-hoc discounts). Senior citizens aged 65+ receive a complimentary Digital X-Ray (RVG) with a paid consultation.`,
+                  },
+                  {
+                    q: 'What payment methods, parking, and accessibility options are available?',
+                    a: `We accept UPI (GPay, PhonePe, Paytm), Credit/Debit cards, and Cash. ${clinicData.parkingAndAccess}`,
+                  },
+                  {
+                    q: 'Can the front desk diagnose tooth pain or prescribe medication online?',
+                    a: `No. For patient safety, our front desk and AI receptionist never give medical advice, diagnoses, or prescriptions. If you have tooth pain, swelling, or sensitivity, a qualified dentist must examine you in person—use our booking form or call ${clinicData.phone} to schedule an evaluation.`,
+                  },
+                ].map((faq, idx) => {
+                  const isOpen = openFaqIndex === idx;
+                  return (
+                    <div key={faq.q} className="py-3.5">
+                      <button
+                        type="button"
+                        aria-expanded={isOpen}
+                        onClick={() => setOpenFaqIndex(isOpen ? null : idx)}
+                        className="w-full text-left flex items-start justify-between gap-4 py-1 cursor-pointer"
+                      >
+                        <span className="text-sm sm:text-base font-semibold text-emerald-950 leading-snug">
+                          {faq.q}
+                        </span>
+                        <span className="mt-0.5 text-emerald-800 shrink-0">
+                          {isOpen ? (
+                            <ChevronUp className="w-4 h-4" aria-hidden="true" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4" aria-hidden="true" />
+                          )}
+                        </span>
+                      </button>
+                      {isOpen && (
+                        <p className="mt-2 pr-6 text-xs sm:text-sm text-slate-600 leading-relaxed">
+                          {faq.a}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
