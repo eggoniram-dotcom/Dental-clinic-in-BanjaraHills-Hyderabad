@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  FrontDeskPopupPanel,
-  FrontDeskTriggerButton,
-} from './components/FloatingFrontDeskChat.tsx';
+import { FrontDeskPopupPanel } from './components/FloatingFrontDeskChat.tsx';
 import {
   WhatsAppPopupPanel,
   WhatsAppTriggerButton,
@@ -214,6 +211,11 @@ export default function App() {
         onNavigate={navigate}
         emergencyPhone={clinicData.emergencyPhone}
         unreadAlerts={unreadAlerts}
+        frontDeskOpen={frontDeskChat.isOpen}
+        onToggleFrontDesk={() => {
+          setWhatsAppOpen(false);
+          frontDeskChat.toggleOpen();
+        }}
       />
 
       {isStaff ? (
@@ -243,14 +245,7 @@ export default function App() {
 
       {!isStaff && (
         <div className="fixed top-16 right-3 sm:right-6 z-40 flex flex-col items-end gap-2.5 max-w-[calc(100vw-1.5rem)]">
-          <div className="flex items-center justify-end gap-2">
-            <FrontDeskTriggerButton
-              isOpen={frontDeskChat.isOpen}
-              onClick={() => {
-                setWhatsAppOpen(false);
-                frontDeskChat.toggleOpen();
-              }}
-            />
+          {!frontDeskChat.isOpen && (
             <WhatsAppTriggerButton
               isOpen={whatsAppOpen}
               onClick={() => {
@@ -258,7 +253,7 @@ export default function App() {
                 setWhatsAppOpen((prev) => !prev);
               }}
             />
-          </div>
+          )}
 
           {frontDeskChat.isOpen && (
             <FrontDeskPopupPanel clinicData={clinicData} chat={frontDeskChat} />
