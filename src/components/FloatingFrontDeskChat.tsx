@@ -87,8 +87,8 @@ export function FrontDeskPopupPanel({ clinicData, chat }: FrontDeskPopupPanelPro
       aria-label="FrontDesk AI — Ask Our AI Receptionist or Request a Slot"
       className={`flex flex-col rounded-2xl bg-white border border-slate-900/15 shadow-[0_24px_60px_-15px_rgba(15,23,42,0.32)] overflow-hidden transition-[width] duration-200 ${
         chat.isExpanded
-          ? 'w-[min(560px,calc(100vw-1.5rem))] h-[min(680px,calc(100dvh-8.5rem))]'
-          : 'w-[min(420px,calc(100vw-1.5rem))] h-[min(600px,calc(100dvh-8.5rem))]'
+          ? 'w-[min(560px,calc(100vw-1.5rem))] h-[min(640px,calc(100dvh-8rem))]'
+          : 'w-[min(420px,calc(100vw-1.5rem))] h-[min(560px,calc(100dvh-8rem))]'
       }`}
     >
       {/* Dashboard-Style Obsidian Header */}
@@ -453,9 +453,9 @@ export function FrontDeskTriggerButton({ isOpen, onClick }: FrontDeskTriggerButt
       onClick={onClick}
       aria-expanded={isOpen}
       aria-label="Front Desk Reception — Open FrontDesk AI"
-      className="inline-flex items-center justify-center gap-2 min-h-[46px] sm:min-h-[48px] px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-full bg-[#0d1b17] text-white text-xs sm:text-sm font-semibold shadow-lg border border-emerald-400/25 hover:bg-emerald-950 transition-colors whitespace-nowrap cursor-pointer"
+      className="inline-flex items-center justify-center gap-1.5 sm:gap-2 min-h-[40px] sm:min-h-[42px] px-3 sm:px-3.5 py-2 rounded-full bg-[#0d1b17] text-white text-xs sm:text-sm font-semibold shadow-md border border-emerald-400/25 hover:bg-emerald-950 transition-colors whitespace-nowrap cursor-pointer"
     >
-      <Bot className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-300 shrink-0" aria-hidden="true" />
+      <Bot className="w-4 h-4 text-emerald-300 shrink-0" aria-hidden="true" />
       <span>Front Desk Reception</span>
     </button>
   );

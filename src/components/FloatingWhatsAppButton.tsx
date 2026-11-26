@@ -48,7 +48,7 @@ export function WhatsAppPopupPanel({
     <div
       role="dialog"
       aria-label="WhatsApp quick appointment enquiry"
-      className="w-[330px] max-w-[calc(100vw-1.5rem)] rounded-2xl bg-white border border-emerald-950/15 shadow-xl overflow-hidden"
+      className="w-[330px] max-w-[calc(100vw-1.5rem)] max-h-[calc(100dvh-8rem)] overflow-y-auto rounded-2xl bg-white border border-emerald-950/15 shadow-xl"
     >
       {/* Header */}
       <div className="px-4 py-3 bg-emerald-900 text-white flex items-center justify-between gap-2">
@@ -137,9 +137,9 @@ export function WhatsAppTriggerButton({ isOpen, onClick }: WhatsAppTriggerButton
       onClick={onClick}
       aria-expanded={isOpen}
       aria-label="WhatsApp Dentistae Dental Care"
-      className="inline-flex items-center justify-center gap-2 min-h-[46px] sm:min-h-[48px] px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-full bg-emerald-700 text-white text-xs sm:text-sm font-semibold shadow-lg hover:bg-emerald-800 transition-colors whitespace-nowrap cursor-pointer"
+      className="inline-flex items-center justify-center gap-1.5 sm:gap-2 min-h-[40px] sm:min-h-[42px] px-3 sm:px-3.5 py-2 rounded-full bg-emerald-700 text-white text-xs sm:text-sm font-semibold shadow-md hover:bg-emerald-800 transition-colors whitespace-nowrap cursor-pointer"
     >
-      <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" aria-hidden="true" />
+      <MessageCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
       <span>WhatsApp</span>
     </button>
   );

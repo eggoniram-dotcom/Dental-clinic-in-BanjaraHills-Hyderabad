@@ -242,19 +242,8 @@ export default function App() {
       )}
 
       {!isStaff && (
-        <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 flex flex-col items-end gap-2.5 max-w-[calc(100vw-1.5rem)]">
-          {frontDeskChat.isOpen && (
-            <FrontDeskPopupPanel clinicData={clinicData} chat={frontDeskChat} />
-          )}
-          {whatsAppOpen && (
-            <WhatsAppPopupPanel
-              clinicData={clinicData}
-              currentPath={currentPath}
-              onClose={() => setWhatsAppOpen(false)}
-            />
-          )}
-
-          <div className="flex items-center justify-end gap-2 sm:gap-2.5">
+        <div className="fixed top-16 right-3 sm:right-6 z-40 flex flex-col items-end gap-2.5 max-w-[calc(100vw-1.5rem)]">
+          <div className="flex items-center justify-end gap-2">
             <FrontDeskTriggerButton
               isOpen={frontDeskChat.isOpen}
               onClick={() => {
@@ -270,6 +259,17 @@ export default function App() {
               }}
             />
           </div>
+
+          {frontDeskChat.isOpen && (
+            <FrontDeskPopupPanel clinicData={clinicData} chat={frontDeskChat} />
+          )}
+          {whatsAppOpen && (
+            <WhatsAppPopupPanel
+              clinicData={clinicData}
+              currentPath={currentPath}
+              onClose={() => setWhatsAppOpen(false)}
+            />
+          )}
         </div>
       )}
     </div>

@@ -187,7 +187,7 @@ export function PatientChatPage({
           Real Clinic & Dentist Photographs, Grounded Proof Cards
          ============================================================ */}
       <section className="border-b border-emerald-950/10 bg-white overflow-x-clip">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-8 pb-10 sm:pt-12 sm:pb-14">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-16 pb-10 sm:pt-16 sm:pb-14">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-stretch">
             {/* Left Editorial Column */}
             <div className="lg:col-span-6 flex flex-col justify-between gap-8 py-1">

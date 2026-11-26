@@ -62,7 +62,7 @@ export function TreatmentDetailPage({
     <main className="bg-[#f8faf9] text-slate-900">
       {/* Breadcrumb, Hero & Treatment-at-a-Glance Strip */}
       <section className="bg-white border-b border-emerald-950/10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-10 sm:pt-8 sm:pb-12">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-16 pb-10 sm:pt-16 sm:pb-12">
           <button
             type="button"
             onClick={() => onNavigateHome('treatments')}
