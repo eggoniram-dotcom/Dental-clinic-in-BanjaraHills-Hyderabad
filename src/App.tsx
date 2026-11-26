@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FloatingWhatsAppButton } from './components/FloatingWhatsAppButton.tsx';
+import {
+  FrontDeskPopupPanel,
+  FrontDeskTriggerButton,
+} from './components/FloatingFrontDeskChat.tsx';
+import {
+  WhatsAppPopupPanel,
+  WhatsAppTriggerButton,
+} from './components/FloatingWhatsAppButton.tsx';
 import { PatientChatPage } from './components/PatientChatPage.tsx';
 import { StaffPortalPage } from './components/StaffPortalPage.tsx';
 import { TopBar, type NavSectionId } from './components/TopBar.tsx';
 import { TreatmentDetailPage } from './components/TreatmentDetailPage.tsx';
+import { useFrontDeskChat } from './hooks/useFrontDeskChat.ts';
 import { apiGetClinicData, apiGetNotifications } from './lib/clinicApi.ts';
 import { normalizeClinicData, type ClinicData } from './types.ts';
 
@@ -46,7 +54,14 @@ export default function App() {
   const [activeSection, setActiveSection] = useState<NavSectionId>(getInitialSection);
   const [clinicData, setClinicData] = useState<ClinicData>(INITIAL_CLINIC_DATA);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
+  const [whatsAppOpen, setWhatsAppOpen] = useState(false);
   const manualNavLockUntilRef = useRef<number>(0);
+
+  const isStaff = currentPath.startsWith('/staff');
+  const treatmentMatch = currentPath.match(/^\/treatments\/([^/]+)\/?$/);
+  const treatmentSlug = treatmentMatch ? decodeURIComponent(treatmentMatch[1]) : null;
+
+  const frontDeskChat = useFrontDeskChat(!isStaff);
 
   const loadClinicData = useCallback(async () => {
     const data = await apiGetClinicData();
@@ -110,10 +125,6 @@ export default function App() {
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
-
-  const isStaff = currentPath.startsWith('/staff');
-  const treatmentMatch = currentPath.match(/^\/treatments\/([^/]+)\/?$/);
-  const treatmentSlug = treatmentMatch ? decodeURIComponent(treatmentMatch[1]) : null;
 
   // Keep the active Header / Navigation Bar item in sync with the section displayed beneath it.
   useEffect(() => {
@@ -220,12 +231,47 @@ export default function App() {
       ) : (
         <PatientChatPage
           clinicData={clinicData}
+          frontDeskChat={frontDeskChat}
+          onOpenFrontDesk={(opts) => {
+            setWhatsAppOpen(false);
+            frontDeskChat.openChat(opts);
+          }}
           onNavigateStaff={() => navigate('/staff')}
           onSelectTreatment={(slug) => navigate(`/treatments/${slug}`)}
         />
       )}
 
-      {!isStaff && <FloatingWhatsAppButton clinicData={clinicData} currentPath={currentPath} />}
+      {!isStaff && (
+        <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 flex flex-col items-end gap-2.5 max-w-[calc(100vw-1.5rem)]">
+          {frontDeskChat.isOpen && (
+            <FrontDeskPopupPanel clinicData={clinicData} chat={frontDeskChat} />
+          )}
+          {whatsAppOpen && (
+            <WhatsAppPopupPanel
+              clinicData={clinicData}
+              currentPath={currentPath}
+              onClose={() => setWhatsAppOpen(false)}
+            />
+          )}
+
+          <div className="flex items-center justify-end gap-2 sm:gap-2.5">
+            <FrontDeskTriggerButton
+              isOpen={frontDeskChat.isOpen}
+              onClick={() => {
+                setWhatsAppOpen(false);
+                frontDeskChat.toggleOpen();
+              }}
+            />
+            <WhatsAppTriggerButton
+              isOpen={whatsAppOpen}
+              onClick={() => {
+                frontDeskChat.closeChat();
+                setWhatsAppOpen((prev) => !prev);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

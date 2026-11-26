@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ArrowRight,
   Award,
+  Bot,
   Calendar,
   CheckCircle2,
   ChevronDown,
@@ -21,10 +22,11 @@ import {
   X,
 } from 'lucide-react';
 import {
-  apiCaptureWhatsAppEnquiry,
-  apiGetSessionMessages,
-  apiSendChatMessage,
-} from '../lib/clinicApi.ts';
+  QUICK_REPLIES,
+  type FrontDeskChatController,
+  type OpenFrontDeskOptions,
+} from '../hooks/useFrontDeskChat.ts';
+import { apiCaptureWhatsAppEnquiry } from '../lib/clinicApi.ts';
 import {
   CLINIC_IMAGES,
   DEFAULT_WHATSAPP_MESSAGE,
@@ -35,38 +37,16 @@ import {
   getNearestDoctorSlots,
   resolveTreatmentService,
 } from '../lib/clinicCatalog.ts';
-import type { ChatMessage, ClinicData } from '../types.ts';
+import type { ClinicData } from '../types.ts';
 import { AppointmentEnquiryForm } from './AppointmentEnquiryForm.tsx';
 
 interface PatientChatPageProps {
   clinicData: ClinicData;
+  frontDeskChat: FrontDeskChatController;
+  onOpenFrontDesk: (opts?: OpenFrontDeskOptions) => void;
   onNavigateStaff?: () => void;
   onSelectTreatment?: (slug: string) => void;
 }
-
-const QUICK_REPLIES = [
-  { label: 'Clinic timings', prompt: 'What are your clinic timings?' },
-  { label: 'Doctors', prompt: 'Which doctors are available at the clinic?' },
-  { label: 'Prices', prompt: 'What are your treatment prices?' },
-  { label: 'Insurance', prompt: 'How does insurance reimbursement work?' },
-  { label: 'Location', prompt: 'Where is the clinic located in Banjara Hills?' },
-  { label: 'Book slot', prompt: 'I want to book an appointment tomorrow at 4:00 PM' },
-  { label: 'हिन्दी (समय)', prompt: 'क्लिनिक का समय और कंसल्टेशन फीस क्या है?' },
-  { label: 'తెలుగు (వేళలు)', prompt: 'క్లినిక్ వేళలు మరియు ధరలు చెప్పండి' },
-];
-
-const BOOKING_DAYS = [
-  'Today',
-  'Tomorrow',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-  'Sunday',
-];
-const BOOKING_TIMES = ['10:00 AM', '11:30 AM', '12:30 PM', '3:00 PM', '4:30 PM', '6:00 PM', '7:00 PM'];
 
 interface ConsentFeedbackItem {
   id: string;
@@ -89,56 +69,19 @@ function loadConsentFeedback(): ConsentFeedbackItem[] {
   }
 }
 
-function getInitialSessionId(hasAutoQuery: boolean): string {
-  if (hasAutoQuery) {
-    const fresh = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    try {
-      localStorage.setItem('dentistae_session_id', fresh);
-    } catch {
-      // Ignore storage errors in restricted contexts
-    }
-    return fresh;
-  }
-  try {
-    const existing = localStorage.getItem('dentistae_session_id');
-    if (existing) return existing;
-    const created = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    localStorage.setItem('dentistae_session_id', created);
-    return created;
-  } catch {
-    return `sess-${Date.now()}`;
-  }
-}
-
 export function PatientChatPage({
   clinicData,
+  frontDeskChat,
+  onOpenFrontDesk,
   onNavigateStaff,
   onSelectTreatment,
 }: PatientChatPageProps) {
-  const initialQuery =
-    typeof window !== 'undefined'
-      ? new URLSearchParams(window.location.search).get('q')?.trim() || ''
-      : '';
-
-  const [sessionId, setSessionId] = useState<string>(() =>
-    getInitialSessionId(Boolean(initialQuery)),
-  );
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [inputValue, setInputValue] = useState('');
-  const [isSending, setIsSending] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
-
   // Zero-Broken-Image fallback state map
   const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
   const markImageBroken = (key: string) =>
     setBrokenImages((prev) => ({ ...prev, [key]: true }));
 
-  // Interactive inline chat booking drawer & doctor slot picker
-  const [bookingDrawerOpen, setBookingDrawerOpen] = useState(false);
-  const [selectedDay, setSelectedDay] = useState('Tomorrow');
-  const [selectedTime, setSelectedTime] = useState('4:30 PM');
-  const [selectedDoctor, setSelectedDoctor] = useState('');
+  // Doctor slot picker & appointment form prefill state
   const [preselectedTreatment, setPreselectedTreatment] = useState<string | undefined>(undefined);
   const [preselectedDate, setPreselectedDate] = useState<string | undefined>(undefined);
   const [preselectedSlot, setPreselectedSlot] = useState<string | undefined>(undefined);
@@ -160,127 +103,10 @@ export function PatientChatPage({
   const [openHygieneIndex, setOpenHygieneIndex] = useState<number | null>(0);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
 
-  const autoAskedRef = useRef(false);
-  const chatSectionRef = useRef<HTMLElement | null>(null);
   const bookingSectionRef = useRef<HTMLElement | null>(null);
-  const chatInputRef = useRef<HTMLInputElement | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const hasInteractedRef = useRef(false);
-
-  const scrollMessagesToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, []);
-
-  useEffect(() => {
-    if (hasInteractedRef.current || messages.length > 0) {
-      scrollMessagesToBottom();
-    }
-  }, [messages, isSending, scrollMessagesToBottom]);
-
-  // Poll active session so staff replies from /staff appear live
-  useEffect(() => {
-    let active = true;
-    const fetchSession = async () => {
-      try {
-        const loaded = await apiGetSessionMessages(sessionId);
-        if (active && Array.isArray(loaded)) {
-          setMessages((prev) => {
-            if (prev.length === loaded.length) {
-              return prev;
-            }
-            if (isSending && loaded.length < prev.length) {
-              return prev;
-            }
-            return loaded;
-          });
-        }
-      } catch {
-        // Silent retry on next poll
-      }
-    };
-
-    if (!initialQuery || autoAskedRef.current) {
-      void fetchSession();
-    }
-    const timer = window.setInterval(() => void fetchSession(), 2000);
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === 'dentistae_sessions_v1') {
-        void fetchSession();
-      }
-    };
-    window.addEventListener('storage', onStorage);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-      window.removeEventListener('storage', onStorage);
-    };
-  }, [sessionId, isSending, initialQuery]);
-
-  const sendMessage = useCallback(
-    async (textToSend: string) => {
-      const trimmed = textToSend.trim();
-      if (!trimmed || isSending) return;
-
-      hasInteractedRef.current = true;
-      setErrorMsg(null);
-      setIsSending(true);
-      setInputValue('');
-
-      const optimisticUserMsg: ChatMessage = {
-        id: `local-${Date.now()}`,
-        sessionId,
-        sender: 'patient',
-        text: trimmed,
-        timestamp: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, optimisticUserMsg]);
-
-      try {
-        const data = await apiSendChatMessage({
-          sessionId,
-          message: trimmed,
-        });
-        if (Array.isArray(data.messages)) {
-          setMessages(data.messages);
-        }
-      } catch (err) {
-        setErrorMsg(
-          err instanceof Error
-            ? err.message
-            : 'Unable to send message. Please try again or call the front desk.',
-        );
-      } finally {
-        setIsSending(false);
-      }
-    },
-    [isSending, sessionId],
-  );
-
-  // Ask on load when ?q=... is present and scroll chat into view
-  useEffect(() => {
-    if (initialQuery && !autoAskedRef.current) {
-      autoAskedRef.current = true;
-      chatSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      void sendMessage(initialQuery);
-    }
-  }, [initialQuery, sendMessage]);
-
-  const handleResetChat = () => {
-    const fresh = getInitialSessionId(true);
-    setSessionId(fresh);
-    setMessages([]);
-    setErrorMsg(null);
-  };
 
   const openChatBookingFlow = (doctorName?: string) => {
-    if (doctorName) {
-      setSelectedDoctor(doctorName);
-    }
-    setBookingDrawerOpen(true);
-    chatSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    window.setTimeout(() => {
-      chatInputRef.current?.focus({ preventScroll: true });
-    }, 350);
+    onOpenFrontDesk({ openSlotBooking: true, doctorName });
   };
 
   const scrollToAppointmentForm = (
@@ -309,14 +135,6 @@ export function PatientChatPage({
       return 'Evening (5:00 PM – 7:30 PM)';
     }
     return 'Afternoon (2:30 PM – 5:00 PM)';
-  };
-
-  const handleConfirmSlotBooking = (e: React.FormEvent) => {
-    e.preventDefault();
-    const doctorPart = selectedDoctor ? ` with ${selectedDoctor}` : '';
-    const prompt = `I would like to book an appointment ${selectedDay} at ${selectedTime}${doctorPart}.`;
-    setBookingDrawerOpen(false);
-    void sendMessage(prompt);
   };
 
   const handleFeedbackSubmit = (e: React.FormEvent) => {
@@ -672,34 +490,19 @@ export function PatientChatPage({
       </section>
 
       {/* ============================================================
-          SECTION 3: LIVE FRONT DESK AI RECEPTIONIST CHAT
-          (Preserves #chat-input, #chat-send, .bot-msg, ?q=, Quick Replies)
+          SECTION 3: FRONTDESK AI RECEPTION LAUNCHER & QUICK-ASK BAR
+          (Opens the floating FrontDesk AI popup; keeps #chat-input & #chat-send
+           accessible even before the popup is opened, with zero duplicate IDs)
          ============================================================ */}
       <section
         id="front-desk-chat"
-        ref={chatSectionRef}
-        aria-label="Front desk chat and clinic quick reference"
+        aria-label="FrontDesk AI reception and clinic quick reference"
         className="border-y border-emerald-950/10 bg-white scroll-mt-16"
       >
-        <div className="max-w-6xl mx-auto px-3 sm:px-6 py-10 sm:py-14">
-          <div className="mb-5 flex flex-col sm:flex-row sm:items-end justify-between gap-2 px-1">
-            <div>
-              <p className="text-xs font-medium text-emerald-800">
-                Instant Front Desk · English, हिन्दी &amp; తెలుగు
-              </p>
-              <h2 className="text-2xl sm:text-3xl font-bold text-emerald-950 tracking-tight mt-0.5">
-                Ask Our AI Receptionist or Request a Slot
-              </h2>
-            </div>
-            <p className="text-xs sm:text-sm text-slate-600 max-w-md">
-              Answers strictly from our live clinic file; medical questions and custom enquiries
-              route directly to our human front desk for a callback within 2 working hours.
-            </p>
-          </div>
-
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
           <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6 items-stretch">
-            {/* Desktop Clinic Quick-Reference Sidebar */}
-            <aside className="hidden lg:flex flex-col bg-[#f8faf9] border border-emerald-950/10 rounded-2xl overflow-hidden">
+            {/* Clinic Quick-Reference Card */}
+            <aside className="flex flex-col bg-[#f8faf9] border border-emerald-950/10 rounded-2xl overflow-hidden">
               <div className="relative h-40 bg-emerald-950/5 overflow-hidden">
                 {!brokenImages.receptionSidebar ? (
                   <img
@@ -717,7 +520,7 @@ export function PatientChatPage({
                 )}
               </div>
 
-              <div className="p-5 flex-1 flex flex-col gap-5">
+              <div className="p-5 flex-1 flex flex-col gap-4">
                 <div>
                   <h3 className="text-lg font-bold text-emerald-950 tracking-tight">
                     {clinicData.clinicName}
@@ -725,18 +528,13 @@ export function PatientChatPage({
                   <p className="text-xs text-slate-600 mt-1">{clinicData.tagline}</p>
                 </div>
 
-                <div className="space-y-3.5 text-sm text-slate-700 border-t border-emerald-950/10 pt-4">
+                <div className="space-y-3 text-sm text-slate-700 border-t border-emerald-950/10 pt-4">
                   <div className="flex items-start gap-2.5">
                     <MapPin
                       className="w-4 h-4 text-emerald-800 shrink-0 mt-0.5"
                       aria-hidden="true"
                     />
-                    <div>
-                      <p className="font-medium text-slate-900">Banjara Hills Clinic</p>
-                      <p className="text-xs text-slate-600 leading-relaxed mt-0.5">
-                        {clinicData.address}
-                      </p>
-                    </div>
+                    <p className="text-xs text-slate-600 leading-relaxed">{clinicData.address}</p>
                   </div>
 
                   <div className="flex items-start gap-2.5">
@@ -744,14 +542,9 @@ export function PatientChatPage({
                       className="w-4 h-4 text-emerald-800 shrink-0 mt-0.5"
                       aria-hidden="true"
                     />
-                    <div>
-                      <p className="font-medium text-slate-900">Clinic Hours</p>
-                      <p className="text-xs text-slate-600 mt-0.5 tabular-nums">
-                        {clinicData.timings?.weekdays}
-                      </p>
-                      <p className="text-xs text-slate-600 tabular-nums">
-                        {clinicData.timings?.sunday}
-                      </p>
+                    <div className="text-xs text-slate-600 tabular-nums">
+                      <p>{clinicData.timings?.weekdays}</p>
+                      <p>{clinicData.timings?.sunday}</p>
                     </div>
                   </div>
 
@@ -760,290 +553,123 @@ export function PatientChatPage({
                       className="w-4 h-4 text-emerald-800 shrink-0 mt-0.5"
                       aria-hidden="true"
                     />
-                    <div>
-                      <p className="font-medium text-slate-900">Front Desk &amp; Emergency</p>
-                      <p className="text-xs text-slate-600 mt-0.5 tabular-nums">
-                        Desk: {clinicData.phone}
-                      </p>
-                      <p className="text-xs font-medium text-rose-700 tabular-nums">
+                    <div className="text-xs tabular-nums">
+                      <p className="text-slate-600">Desk: {clinicData.phone}</p>
+                      <p className="font-medium text-rose-700">
                         24/7 Emergency: {clinicData.emergencyPhone}
                       </p>
                     </div>
                   </div>
                 </div>
+              </div>
+            </aside>
 
-                <div className="border-t border-emerald-950/10 pt-4 mt-auto space-y-2.5">
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
-                    <span>Verified clinic file answers · No invented fees</span>
+            {/* Compact FrontDesk AI Dashboard Launcher Card */}
+            <div className="flex flex-col justify-between rounded-2xl bg-[#0d1b17] text-white border border-emerald-950/15 p-6 sm:p-8">
+              <div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl bg-emerald-500/15 border border-emerald-400/30 flex items-center justify-center shrink-0">
+                      <Bot className="w-6 h-6 text-emerald-300" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-emerald-300">
+                        FrontDesk AI · English, हिन्दी &amp; తెలుగు
+                      </p>
+                      <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white mt-0.5">
+                        Ask Our AI Receptionist or Request a Slot
+                      </h2>
+                    </div>
                   </div>
+                </div>
+
+                <p className="mt-4 text-sm text-slate-300 leading-relaxed max-w-2xl">
+                  Launch <span className="font-semibold text-white">FrontDesk AI</span> using the{' '}
+                  <span className="font-semibold text-emerald-200">Front Desk Reception</span>{' '}
+                  button below or start a question right here. Answers come strictly from our live
+                  clinic file; medical questions and custom requests route directly to our human
+                  front desk for a callback within 2 working hours.
+                </p>
+
+                {/* Direct Launch Buttons */}
+                <div className="mt-5 flex flex-wrap items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => onOpenFrontDesk()}
+                    className="inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5 rounded-xl bg-emerald-400 text-slate-950 text-sm font-semibold hover:bg-emerald-300 transition-colors whitespace-nowrap cursor-pointer"
+                  >
+                    <Bot className="w-4 h-4 shrink-0" aria-hidden="true" />
+                    <span>Open FrontDesk AI</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => openChatBookingFlow()}
-                    className="w-full inline-flex items-center justify-center gap-1.5 min-h-[40px] px-4 py-2 rounded-lg border border-emerald-900/20 bg-white text-xs font-semibold text-emerald-950 hover:bg-emerald-50 transition-colors cursor-pointer"
+                    className="inline-flex items-center justify-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl border border-white/15 bg-white/5 text-white text-sm font-medium hover:bg-white/10 transition-colors whitespace-nowrap cursor-pointer"
                   >
-                    <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
+                    <Calendar className="w-4 h-4 text-emerald-300 shrink-0" aria-hidden="true" />
                     <span>Quick Slot Selector</span>
                   </button>
                 </div>
               </div>
-            </aside>
 
-            {/* Primary Patient Chat Workspace */}
-            <div
-              aria-label="Patient reception chat"
-              className="flex flex-col bg-white border border-emerald-950/10 rounded-2xl overflow-hidden h-[560px] sm:h-[620px]"
-            >
-              {/* Chat Header */}
-              <div className="px-4 sm:px-5 py-3 border-b border-slate-100 flex items-center justify-between gap-3 shrink-0">
-                <div className="min-w-0">
-                  <h3 className="text-base font-semibold text-emerald-950 truncate">
-                    Front Desk Reception
-                  </h3>
-                  <p className="text-xs text-slate-500 truncate">
-                    Timings, doctors, tariffs, insurance &amp; appointment slots
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setBookingDrawerOpen((prev) => !prev)}
-                    className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[40px] text-xs font-medium text-emerald-900 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                  >
-                    <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
-                    <span>Book Slot</span>
-                  </button>
-                  {messages.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleResetChat}
-                      className="px-3 py-1.5 min-h-[40px] text-xs font-medium text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                    >
-                      New Chat
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setMobileInfoOpen((prev) => !prev)}
-                    aria-expanded={mobileInfoOpen}
-                    className="lg:hidden inline-flex items-center gap-1 px-3 py-1.5 min-h-[40px] text-xs font-medium text-emerald-900 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                  >
-                    <span>Clinic Info</span>
-                    {mobileInfoOpen ? (
-                      <ChevronUp className="w-3.5 h-3.5" aria-hidden="true" />
-                    ) : (
-                      <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Mobile Collapsible Clinic Info Drawer */}
-              {mobileInfoOpen && (
-                <div className="lg:hidden px-4 py-3 bg-emerald-50/60 border-b border-emerald-950/10 text-xs text-slate-700 space-y-1.5 shrink-0">
-                  <p className="font-semibold text-emerald-950">{clinicData.clinicName}</p>
-                  <p>{clinicData.address}</p>
-                  <p className="tabular-nums">
-                    {clinicData.timings?.weekdays} · {clinicData.timings?.sunday}
-                  </p>
-                  <p className="tabular-nums">
-                    Desk: {clinicData.phone} · Emergency: {clinicData.emergencyPhone}
-                  </p>
-                </div>
-              )}
-
-              {/* Inline Quick Slot Booking Bar */}
-              {bookingDrawerOpen && (
+              {/* Inline Quick-Ask Bar + Quick Prompts (hands off #chat-input/#chat-send to open popup) */}
+              <div className="mt-6 pt-5 border-t border-white/10 space-y-3">
                 <form
-                  onSubmit={handleConfirmSlotBooking}
-                  className="px-4 sm:px-5 py-3 bg-emerald-50/70 border-b border-emerald-950/10 shrink-0"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (frontDeskChat.inputValue.trim()) {
+                      void frontDeskChat.sendMessage(frontDeskChat.inputValue);
+                    } else {
+                      onOpenFrontDesk();
+                    }
+                  }}
+                  className="flex items-center gap-2"
                 >
-                  <div className="flex items-center justify-between gap-2 mb-2.5">
-                    <p className="text-xs font-semibold text-emerald-950">
-                      Request an Appointment Slot in Chat
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setBookingDrawerOpen(false)}
-                      aria-label="Close slot selector"
-                      className="p-1 text-slate-500 hover:text-slate-900 rounded cursor-pointer"
-                    >
-                      <X className="w-4 h-4" aria-hidden="true" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-                    <select
-                      aria-label="Preferred day"
-                      value={selectedDay}
-                      onChange={(e) => setSelectedDay(e.target.value)}
-                      className="h-10 px-2.5 rounded-lg border border-emerald-950/15 bg-white text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-700"
-                    >
-                      {BOOKING_DAYS.map((day) => (
-                        <option key={day} value={day}>
-                          {day}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      aria-label="Preferred time"
-                      value={selectedTime}
-                      onChange={(e) => setSelectedTime(e.target.value)}
-                      className="h-10 px-2.5 rounded-lg border border-emerald-950/15 bg-white text-xs text-slate-800 tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-700"
-                    >
-                      {BOOKING_TIMES.map((time) => (
-                        <option key={time} value={time}>
-                          {time}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      aria-label="Preferred doctor"
-                      value={selectedDoctor}
-                      onChange={(e) => setSelectedDoctor(e.target.value)}
-                      className="h-10 px-2.5 rounded-lg border border-emerald-950/15 bg-white text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-700"
-                    >
-                      <option value="">Any Available Dentist</option>
-                      {clinicData.doctors.map((doc) => (
-                        <option key={doc.id} value={doc.name}>
-                          {doc.name}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="submit"
-                      disabled={isSending}
-                      className="h-10 px-3 rounded-lg bg-emerald-900 text-white text-xs font-semibold hover:bg-emerald-800 transition-colors whitespace-nowrap disabled:opacity-50 cursor-pointer"
-                    >
-                      Confirm Request
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {/* Scrollable Message Stream */}
-              <div className="flex-1 overflow-y-auto px-3 sm:px-5 py-4 space-y-4 bg-stone-50/40">
-                {/* Welcome Card (does NOT use .bot-msg so .bot-msg is strictly actual answers) */}
-                <div className="bg-white border border-slate-200/80 rounded-xl p-4 text-sm text-slate-700">
-                  <p className="font-semibold text-emerald-950">
-                    Welcome to {clinicData.clinicName}
-                  </p>
-                  <p className="mt-1 text-slate-600 leading-relaxed">
-                    Ask about clinic timings, doctors, treatment prices, insurance reimbursement, or
-                    request an appointment. Questions outside our clinic file are routed to our
-                    human front desk for a callback within 2 working hours.
-                  </p>
-                </div>
-
-                {messages.map((msg) => {
-                  if (msg.sender === 'patient') {
-                    return (
-                      <div key={msg.id} className="flex justify-end">
-                        <div className="max-w-[85%] sm:max-w-[75%] rounded-2xl rounded-br-sm bg-emerald-900 text-white px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words">
-                          {msg.text}
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  const isStaff = msg.sender === 'staff';
-                  return (
-                    <div key={msg.id} className="flex justify-start">
-                      <div
-                        className={`bot-msg max-w-[90%] sm:max-w-[80%] rounded-2xl rounded-bl-sm px-4 py-3 text-sm leading-relaxed border break-words ${
-                          isStaff
-                            ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
-                            : 'bg-white border-slate-200 text-slate-800'
-                        }`}
-                      >
-                        {isStaff && (
-                          <p className="text-xs font-semibold text-emerald-900 mb-1">
-                            Front Desk Staff
-                          </p>
-                        )}
-                        <div className="whitespace-pre-wrap">{msg.text}</div>
-                        {msg.fallbackUsed && (
-                          <p className="mt-2 pt-1.5 border-t border-slate-100 text-[11px] text-slate-500">
-                            Answered from the clinic file
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {isSending && (
-                  <div className="flex justify-start">
-                    <div
-                      aria-live="polite"
-                      className="rounded-2xl rounded-bl-sm bg-white border border-slate-200 px-4 py-2.5 text-xs text-slate-500"
-                    >
-                      Checking clinic records...
-                    </div>
-                  </div>
-                )}
-
-                {errorMsg && (
-                  <div
-                    role="alert"
-                    className="rounded-xl bg-rose-50 border border-rose-200 px-4 py-2.5 text-xs text-rose-800"
+                  <input
+                    id={frontDeskChat.isOpen ? undefined : 'chat-input'}
+                    type="text"
+                    value={frontDeskChat.inputValue}
+                    onChange={(e) => frontDeskChat.setInputValue(e.target.value)}
+                    placeholder="Ask FrontDesk AI about timings, doctors, prices, or book a slot..."
+                    aria-label="Ask FrontDesk AI"
+                    className="flex-1 min-w-0 h-11 px-4 rounded-xl border border-white/15 bg-white/10 text-sm text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:bg-white/15"
+                  />
+                  <button
+                    id={frontDeskChat.isOpen ? undefined : 'chat-send'}
+                    type="submit"
+                    disabled={frontDeskChat.isSending}
+                    aria-label="Send question to FrontDesk AI"
+                    className="inline-flex items-center justify-center gap-1.5 h-11 min-w-[44px] px-4 rounded-xl bg-emerald-500 text-slate-950 text-sm font-semibold hover:bg-emerald-400 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50 cursor-pointer"
                   >
-                    {errorMsg}
-                  </div>
-                )}
+                    <Send className="w-4 h-4" aria-hidden="true" />
+                    <span className="hidden sm:inline">Ask AI</span>
+                  </button>
+                </form>
 
-                <div ref={messagesEndRef} />
-              </div>
-
-              {/* Quick-Reply Bar */}
-              <div className="px-3 sm:px-5 pt-2.5 pb-1.5 border-t border-slate-100 bg-white shrink-0">
                 <div
-                  aria-label="Quick questions"
+                  aria-label="Quick FrontDesk AI prompts"
                   className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar"
                 >
                   {QUICK_REPLIES.map((qr) => (
                     <button
                       key={qr.label}
                       type="button"
-                      data-quick-reply={qr.label}
-                      disabled={isSending}
-                      onClick={() => void sendMessage(qr.prompt)}
-                      className="px-3 py-2 min-h-[40px] rounded-lg border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 text-xs font-medium text-slate-700 hover:text-emerald-950 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50 cursor-pointer"
+                      data-quick-reply={frontDeskChat.isOpen ? undefined : qr.label}
+                      disabled={frontDeskChat.isSending}
+                      onClick={() => onOpenFrontDesk({ prompt: qr.prompt })}
+                      className="px-3 py-1.5 min-h-[36px] rounded-lg border border-white/15 bg-white/5 hover:bg-white/15 text-xs font-medium text-slate-200 hover:text-white transition-colors whitespace-nowrap shrink-0 disabled:opacity-50 cursor-pointer"
                     >
                       {qr.label}
                     </button>
                   ))}
                 </div>
-              </div>
 
-              {/* Composer */}
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void sendMessage(inputValue);
-                }}
-                className="p-3 sm:px-5 sm:py-3.5 bg-white border-t border-slate-100 flex items-center gap-2 shrink-0"
-              >
-                <input
-                  ref={chatInputRef}
-                  id="chat-input"
-                  type="text"
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  placeholder="Ask about timings, doctors, prices, or book..."
-                  aria-label="Ask the dental clinic front desk"
-                  className="flex-1 min-w-0 h-11 px-3.5 rounded-xl border border-slate-300 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-700 focus:border-emerald-700"
-                />
-                <button
-                  id="chat-send"
-                  type="submit"
-                  disabled={isSending || !inputValue.trim()}
-                  aria-label="Send message"
-                  className="inline-flex items-center justify-center gap-1.5 h-11 min-w-[44px] px-4 rounded-xl bg-emerald-900 text-white text-sm font-medium hover:bg-emerald-800 transition-colors whitespace-nowrap shrink-0 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                >
-                  <Send className="w-4 h-4" aria-hidden="true" />
-                  <span className="hidden sm:inline">Send</span>
-                </button>
-              </form>
+                <div className="flex items-center gap-2 text-xs text-slate-400">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />
+                  <span>Verified clinic file answers · No invented fees or clinical claims</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1283,21 +909,17 @@ export function PatientChatPage({
                           <button
                             type="button"
                             onClick={() => {
-                              setSelectedDoctor(doc.name);
-                              setSelectedDay(currentPick.shortDayName);
-                              setSelectedTime(currentPick.time);
                               setActiveSlotDoctorId(null);
-                              chatSectionRef.current?.scrollIntoView({
-                                behavior: 'smooth',
-                                block: 'start',
+                              onOpenFrontDesk({
+                                doctorName: doc.name,
+                                day: currentPick.shortDayName,
+                                time: currentPick.time,
+                                prompt: `I would like to book an appointment with ${doc.name} on ${currentPick.dayLabel} at ${currentPick.time}.`,
                               });
-                              void sendMessage(
-                                `I would like to book an appointment with ${doc.name} on ${currentPick.dayLabel} at ${currentPick.time}.`,
-                              );
                             }}
                             className="inline-flex items-center justify-center gap-1.5 min-h-[38px] px-3.5 py-2 rounded-lg border border-emerald-950/15 bg-white text-xs font-semibold text-emerald-950 hover:bg-emerald-50 transition-colors cursor-pointer"
                           >
-                            <span>Request in Chat</span>
+                            <span>Request in FrontDesk AI</span>
                           </button>
                         </div>
                       </div>
