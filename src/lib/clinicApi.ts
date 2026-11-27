@@ -66,11 +66,17 @@ export async function detectBackendAvailable(): Promise<boolean> {
   return probePromise;
 }
 
+function notifyClinicDataUpdated(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('dentistae:clinic-data-updated'));
+  }
+}
+
 export async function apiGetClinicData(): Promise<ClinicData> {
   const hasBackend = await detectBackendAvailable();
   if (hasBackend) {
     try {
-      const res = await fetch('/api/clinic-data');
+      const res = await fetch('/api/clinic-data', { cache: 'no-store' });
       if (await isJsonResponse(res)) {
         const data = (await res.json()) as Partial<ClinicData>;
         return normalizeClinicData(data);
@@ -85,35 +91,71 @@ export async function apiGetClinicData(): Promise<ClinicData> {
 export async function apiUpdateClinicData(payload: Partial<ClinicData>): Promise<ClinicData> {
   const hasBackend = await detectBackendAvailable();
   if (hasBackend) {
-    try {
-      const res = await fetch('/api/clinic-data', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (await isJsonResponse(res)) {
-        return normalizeClinicData((await res.json()) as Partial<ClinicData>);
+    let lastErrorMessage: string | null = null;
+    for (const method of ['PUT', 'POST'] as const) {
+      try {
+        const res = await fetch('/api/clinic-data', {
+          method,
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (await isJsonResponse(res)) {
+          const saved = normalizeClinicData((await res.json()) as Partial<ClinicData>);
+          localUpdateClinicData(saved);
+          notifyClinicDataUpdated();
+          return saved;
+        }
+        // If server returned a real 4xx/5xx JSON error, capture it instead of silently swallowing
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const errBody = (await res.json().catch(() => null)) as { error?: string } | null;
+          lastErrorMessage = errBody?.error || `Server error (${res.status}) while saving clinic file.`;
+          if (res.status !== 405) {
+            throw new Error(lastErrorMessage);
+          }
+        } else if (res.status !== 405 && res.status !== 404) {
+          lastErrorMessage = `Server returned status ${res.status} while saving clinic file.`;
+        }
+      } catch (err) {
+        if (err instanceof Error && lastErrorMessage && err.message === lastErrorMessage) {
+          throw err;
+        }
+        if (method === 'POST') {
+          backendMode = 'static';
+        }
       }
-    } catch {
-      backendMode = 'static';
+    }
+    if (lastErrorMessage) {
+      throw new Error(lastErrorMessage);
     }
   }
-  return localUpdateClinicData(payload);
+  const localSaved = localUpdateClinicData(payload);
+  notifyClinicDataUpdated();
+  return localSaved;
 }
 
 export async function apiResetClinicData(): Promise<ClinicData> {
   const hasBackend = await detectBackendAvailable();
   if (hasBackend) {
     try {
-      const res = await fetch('/api/clinic-data/reset', { method: 'POST' });
+      const res = await fetch('/api/clinic-data/reset', {
+        method: 'POST',
+        cache: 'no-store',
+      });
       if (await isJsonResponse(res)) {
-        return normalizeClinicData((await res.json()) as Partial<ClinicData>);
+        const reset = normalizeClinicData((await res.json()) as Partial<ClinicData>);
+        localUpdateClinicData(reset);
+        notifyClinicDataUpdated();
+        return reset;
       }
     } catch {
       backendMode = 'static';
     }
   }
-  return localResetClinicData();
+  const localReset = localResetClinicData();
+  notifyClinicDataUpdated();
+  return localReset;
 }
 
 export async function apiGetSessionMessages(sessionId: string): Promise<ChatMessage[]> {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Bell,
@@ -88,20 +88,32 @@ export function StaffPortalPage({
   const [notifications, setNotifications] = useState<ReceptionistNotification[]>([]);
 
   // Clinic file editor state
-  const [draftClinic, setDraftClinic] = useState<ClinicData>(() =>
+  const [draftClinic, setDraftClinicRaw] = useState<ClinicData>(() =>
     normalizeClinicData(clinicData),
   );
   const [rawJsonMode, setRawJsonMode] = useState(false);
   const [rawJsonText, setRawJsonText] = useState(() =>
     JSON.stringify(normalizeClinicData(clinicData), null, 2),
   );
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const dirtyRef = useRef(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSavingClinic, setIsSavingClinic] = useState(false);
 
+  const setDraftClinic = useCallback(
+    (next: ClinicData | ((prev: ClinicData) => ClinicData)) => {
+      dirtyRef.current = true;
+      setHasUnsavedChanges(true);
+      setDraftClinicRaw(next);
+    },
+    [],
+  );
+
   useEffect(() => {
+    if (dirtyRef.current) return;
     const normalized = normalizeClinicData(clinicData);
-    setDraftClinic(normalized);
+    setDraftClinicRaw(normalized);
     setRawJsonText(JSON.stringify(normalized, null, 2));
   }, [clinicData]);
 
@@ -227,17 +239,37 @@ export function StaffPortalPage({
     setSaveError(null);
     setIsSavingClinic(true);
     try {
-      const parsed = rawJsonMode
-        ? (JSON.parse(rawJsonText) as Partial<ClinicData>)
-        : draftClinic;
-      const payload = normalizeClinicData(parsed);
+      let sourceData: Record<string, unknown> | Partial<ClinicData>;
+      if (rawJsonMode) {
+        const parsedRaw = JSON.parse(rawJsonText) as unknown;
+        if (!parsedRaw || typeof parsedRaw !== 'object' || Array.isArray(parsedRaw)) {
+          throw new Error('Clinic data JSON must be a valid JSON object.');
+        }
+        sourceData = parsedRaw as Record<string, unknown>;
+      } else {
+        sourceData = draftClinic;
+      }
 
+      const payload = normalizeClinicData(sourceData);
       const updated = await apiUpdateClinicData(payload);
+
+      dirtyRef.current = false;
+      setHasUnsavedChanges(false);
+      setDraftClinicRaw(updated);
+      setRawJsonText(JSON.stringify(updated, null, 2));
       onClinicDataUpdated(updated);
-      setSaveStatus('Clinic file saved. Bot and fallback replies now use the updated data.');
+
+      const savedTime = new Date().toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+      setSaveStatus(
+        `Clinic file saved (${savedTime}). FrontDesk AI, website pages, and fallback replies now use the updated data.`,
+      );
     } catch (err) {
       setSaveError(
-        err instanceof Error ? err.message : 'Invalid JSON or failed to save.',
+        err instanceof Error ? err.message : 'Invalid JSON or failed to save clinic file.',
       );
     } finally {
       setIsSavingClinic(false);
@@ -249,6 +281,10 @@ export function StaffPortalPage({
     setSaveError(null);
     try {
       const fresh = await apiResetClinicData();
+      dirtyRef.current = false;
+      setHasUnsavedChanges(false);
+      setDraftClinicRaw(fresh);
+      setRawJsonText(JSON.stringify(fresh, null, 2));
       onClinicDataUpdated(fresh);
       setSaveStatus('Clinic file restored to default Banjara Hills records.');
     } catch {
@@ -261,13 +297,32 @@ export function StaffPortalPage({
     if (!file) return;
     try {
       const text = await file.text();
-      const parsed = normalizeClinicData(JSON.parse(text) as Partial<ClinicData>);
-      setDraftClinic(parsed);
-      setRawJsonText(JSON.stringify(parsed, null, 2));
-      setSaveStatus(`Loaded ${file.name}. Click "Save Clinic File" to apply.`);
+      const rawParsed = JSON.parse(text) as unknown;
+      if (!rawParsed || typeof rawParsed !== 'object' || Array.isArray(rawParsed)) {
+        throw new Error('Uploaded file must contain a JSON object with clinic fields.');
+      }
+      const normalized = normalizeClinicData(
+        rawParsed as Record<string, unknown>,
+        draftClinic,
+      );
+      dirtyRef.current = true;
+      setHasUnsavedChanges(true);
+      setDraftClinicRaw(normalized);
+      setRawJsonText(JSON.stringify(normalized, null, 2));
+      setSaveStatus(
+        `Loaded "${file.name}" (${normalized.clinicName} · ${normalized.doctors.length} doctors, ${normalized.services.length} services). Click "Save Clinic File" to save changes.`,
+      );
       setSaveError(null);
-    } catch {
-      setSaveError('Uploaded file is not valid clinic-data JSON.');
+    } catch (err) {
+      setSaveError(
+        err instanceof Error
+          ? `Could not import ${file.name}: ${err.message}`
+          : 'Uploaded file is not valid clinic-data JSON.',
+      );
+      setSaveStatus(null);
+    } finally {
+      // Allow re-uploading the same filename immediately
+      e.target.value = '';
     }
   };
 
@@ -713,10 +768,29 @@ export function StaffPortalPage({
                 <button
                   type="button"
                   onClick={handleDownloadJson}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-lg border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 whitespace-nowrap"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[40px] rounded-lg border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 whitespace-nowrap cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>Export JSON</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isSavingClinic}
+                  onClick={() => void handleSaveClinicFile()}
+                  className={`inline-flex items-center gap-1.5 px-4 py-2 min-h-[40px] rounded-lg text-xs font-semibold text-white transition-colors whitespace-nowrap disabled:opacity-50 cursor-pointer ${
+                    hasUnsavedChanges
+                      ? 'bg-emerald-700 hover:bg-emerald-800 ring-2 ring-emerald-500/30'
+                      : 'bg-emerald-900 hover:bg-emerald-800'
+                  }`}
+                >
+                  <Save className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>
+                    {isSavingClinic
+                      ? 'Saving...'
+                      : hasUnsavedChanges
+                        ? 'Save Clinic File *'
+                        : 'Save Clinic File'}
+                  </span>
                 </button>
               </div>
             </div>
@@ -746,7 +820,11 @@ export function StaffPortalPage({
                 <textarea
                   rows={20}
                   value={rawJsonText}
-                  onChange={(e) => setRawJsonText(e.target.value)}
+                  onChange={(e) => {
+                    dirtyRef.current = true;
+                    setHasUnsavedChanges(true);
+                    setRawJsonText(e.target.value);
+                  }}
                   className="w-full p-3.5 rounded-xl border border-slate-300 font-mono text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
                 />
               </div>
@@ -1416,23 +1494,41 @@ export function StaffPortalPage({
               </div>
             )}
 
-            <div className="border-t border-slate-100 pt-4 flex flex-wrap items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => void handleResetClinicFile()}
-                className="px-3.5 py-2 min-h-[40px] rounded-lg border border-slate-300 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-              >
-                Reset to Default Clinic File
-              </button>
-              <button
-                type="button"
-                disabled={isSavingClinic}
-                onClick={() => void handleSaveClinicFile()}
-                className="inline-flex items-center gap-1.5 px-5 py-2.5 min-h-[44px] rounded-xl bg-emerald-900 text-white text-sm font-medium hover:bg-emerald-800 transition-colors disabled:opacity-50"
-              >
-                <Save className="w-4 h-4" aria-hidden="true" />
-                <span>{isSavingClinic ? 'Saving...' : 'Save Clinic File'}</span>
-              </button>
+            <div className="border-t border-slate-100 pt-4 space-y-3">
+              {saveStatus && (
+                <div
+                  role="status"
+                  className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-2.5 text-xs font-medium text-emerald-900"
+                >
+                  {saveStatus}
+                </div>
+              )}
+              {saveError && (
+                <div
+                  role="alert"
+                  className="rounded-xl bg-rose-50 border border-rose-200 px-4 py-2.5 text-xs font-medium text-rose-800"
+                >
+                  {saveError}
+                </div>
+              )}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => void handleResetClinicFile()}
+                  className="px-3.5 py-2 min-h-[40px] rounded-lg border border-slate-300 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 cursor-pointer"
+                >
+                  Reset to Default Clinic File
+                </button>
+                <button
+                  type="button"
+                  disabled={isSavingClinic}
+                  onClick={() => void handleSaveClinicFile()}
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 min-h-[44px] rounded-xl bg-emerald-900 text-white text-sm font-medium hover:bg-emerald-800 transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" aria-hidden="true" />
+                  <span>{isSavingClinic ? 'Saving...' : 'Save Clinic File'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </section>

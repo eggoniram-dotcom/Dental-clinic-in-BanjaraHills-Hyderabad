@@ -84,11 +84,16 @@ export default function App() {
     const onNotifEvent = () => {
       void loadUnreadAlerts();
     };
+    const onClinicEvent = () => {
+      void loadClinicData();
+    };
     window.addEventListener('storage', onStorage);
     window.addEventListener('dentistae:notifications-updated', onNotifEvent);
+    window.addEventListener('dentistae:clinic-data-updated', onClinicEvent);
     return () => {
       window.removeEventListener('storage', onStorage);
       window.removeEventListener('dentistae:notifications-updated', onNotifEvent);
+      window.removeEventListener('dentistae:clinic-data-updated', onClinicEvent);
     };
   }, [loadClinicData, loadUnreadAlerts]);
 

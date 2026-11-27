@@ -30,30 +30,42 @@ const VALID_LEAD_STATUSES: LeadStatus[] = ['New', 'Contacted', 'Appointment', 'C
 
 async function startServer(): Promise<void> {
   const app = express();
-  app.use(express.json({ limit: '2mb' }));
+  app.use(express.json({ limit: '5mb' }));
 
   // Health check
   app.get('/api/health', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
     res.json({ ok: true });
   });
 
   // Clinic data endpoints
   app.get('/api/clinic-data', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
     res.json(getClinicData());
   });
 
-  app.put('/api/clinic-data', (req, res) => {
-    const body = req.body as ClinicData;
-    if (!body || !body.clinicName || !Array.isArray(body.doctors) || !Array.isArray(body.services)) {
-      res.status(400).json({ error: 'Invalid clinic data payload.' });
+  const handleSaveClinicDataRoute = (req: express.Request, res: express.Response) => {
+    const body = req.body as Partial<ClinicData> | null;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      res.status(400).json({ error: 'Invalid clinic data JSON payload.' });
       return;
     }
-    const updated = updateClinicData(body);
-    res.json(updated);
-  });
+    try {
+      const updated = updateClinicData(body);
+      res.setHeader('Cache-Control', 'no-store');
+      res.json(updated);
+    } catch (err) {
+      console.error('Failed to persist clinic data:', err);
+      res.status(500).json({ error: 'Failed to persist clinic data on server.' });
+    }
+  };
+
+  app.put('/api/clinic-data', handleSaveClinicDataRoute);
+  app.post('/api/clinic-data', handleSaveClinicDataRoute);
 
   app.post('/api/clinic-data/reset', (_req, res) => {
     const reset = resetClinicData();
+    res.setHeader('Cache-Control', 'no-store');
     res.json(reset);
   });
 

@@ -47,52 +47,134 @@ let sessionsCache: Record<string, ChatMessage[]> | null = null;
 let leadsCache: LeadEnquiry[] | null = null;
 let notificationsCache: ReceptionistNotification[] | null = null;
 
+function toStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === 'string' ? item.trim() : String(item ?? '').trim()))
+      .filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(/\r?\n|,/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
 export function normalizeClinicData(input: Partial<ClinicData> | null | undefined): ClinicData {
   const base = structuredClone(DEFAULT_CLINIC_DATA);
-  if (!input || typeof input !== 'object') {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return base;
   }
+
+  const raw = input as Record<string, unknown>;
+  const unwrapped =
+    raw.clinicData && typeof raw.clinicData === 'object' && !Array.isArray(raw.clinicData)
+      ? (raw.clinicData as Partial<ClinicData>)
+      : raw.data && typeof raw.data === 'object' && !Array.isArray(raw.data)
+        ? (raw.data as Partial<ClinicData>)
+        : input;
+
   return {
-    clinicName: typeof input.clinicName === 'string' && input.clinicName.trim() ? input.clinicName : base.clinicName,
-    tagline: typeof input.tagline === 'string' ? input.tagline : base.tagline,
-    address: typeof input.address === 'string' ? input.address : base.address,
-    landmark: typeof input.landmark === 'string' ? input.landmark : base.landmark,
-    phone: typeof input.phone === 'string' ? input.phone : base.phone,
-    emergencyPhone: typeof input.emergencyPhone === 'string' ? input.emergencyPhone : base.emergencyPhone,
-    email: typeof input.email === 'string' ? input.email : base.email,
+    clinicName:
+      typeof unwrapped.clinicName === 'string' && unwrapped.clinicName.trim()
+        ? unwrapped.clinicName.trim()
+        : base.clinicName,
+    tagline: typeof unwrapped.tagline === 'string' ? unwrapped.tagline : base.tagline,
+    address: typeof unwrapped.address === 'string' ? unwrapped.address : base.address,
+    landmark: typeof unwrapped.landmark === 'string' ? unwrapped.landmark : base.landmark,
+    phone: typeof unwrapped.phone === 'string' ? unwrapped.phone : base.phone,
+    emergencyPhone:
+      typeof unwrapped.emergencyPhone === 'string' ? unwrapped.emergencyPhone : base.emergencyPhone,
+    email: typeof unwrapped.email === 'string' ? unwrapped.email : base.email,
     timings: {
-      weekdays: typeof input.timings?.weekdays === 'string' ? input.timings.weekdays : base.timings.weekdays,
-      sunday: typeof input.timings?.sunday === 'string' ? input.timings.sunday : base.timings.sunday,
-      lunchBreak: typeof input.timings?.lunchBreak === 'string' ? input.timings.lunchBreak : base.timings.lunchBreak,
+      weekdays:
+        typeof unwrapped.timings?.weekdays === 'string'
+          ? unwrapped.timings.weekdays
+          : base.timings.weekdays,
+      sunday:
+        typeof unwrapped.timings?.sunday === 'string'
+          ? unwrapped.timings.sunday
+          : base.timings.sunday,
+      lunchBreak:
+        typeof unwrapped.timings?.lunchBreak === 'string'
+          ? unwrapped.timings.lunchBreak
+          : base.timings.lunchBreak,
     },
-    doctors: Array.isArray(input.doctors)
-      ? input.doctors.map((doc) => {
-          const fallbackDoc = base.doctors.find((d) => d.id === doc.id);
-          return {
-            ...doc,
-            registrationNumber:
-              typeof doc.registrationNumber === 'string' && doc.registrationNumber.trim()
-                ? doc.registrationNumber
-                : fallbackDoc?.registrationNumber || '',
-            expertise:
-              Array.isArray(doc.expertise) && doc.expertise.length > 0
-                ? doc.expertise
-                : fallbackDoc?.expertise || [],
-          };
-        })
+    doctors: Array.isArray(unwrapped.doctors)
+      ? unwrapped.doctors
+          .filter((doc): doc is NonNullable<typeof doc> => Boolean(doc && typeof doc === 'object'))
+          .map((doc, idx) => {
+            const fallbackDoc = base.doctors.find((d) => d.id === doc.id);
+            const expertiseList = toStringArray(doc.expertise);
+            return {
+              id: typeof doc.id === 'string' && doc.id.trim() ? doc.id.trim() : `doc-${idx + 1}`,
+              name: typeof doc.name === 'string' ? doc.name : '',
+              qualification: typeof doc.qualification === 'string' ? doc.qualification : '',
+              registrationNumber:
+                typeof doc.registrationNumber === 'string' && doc.registrationNumber.trim()
+                  ? doc.registrationNumber
+                  : fallbackDoc?.registrationNumber || '',
+              specialty: typeof doc.specialty === 'string' ? doc.specialty : '',
+              expertise:
+                expertiseList.length > 0 ? expertiseList : fallbackDoc?.expertise || [],
+              schedule: typeof doc.schedule === 'string' ? doc.schedule : '',
+            };
+          })
       : base.doctors,
-    services: Array.isArray(input.services) ? input.services : base.services,
-    policies: Array.isArray(input.policies) ? input.policies : base.policies,
+    services: Array.isArray(unwrapped.services)
+      ? unwrapped.services
+          .filter((srv): srv is NonNullable<typeof srv> => Boolean(srv && typeof srv === 'object'))
+          .map((srv, idx) => ({
+            id: typeof srv.id === 'string' && srv.id.trim() ? srv.id.trim() : `srv-${idx + 1}`,
+            name: typeof srv.name === 'string' ? srv.name : '',
+            price: typeof srv.price === 'string' ? srv.price : String(srv.price ?? ''),
+            notes: typeof srv.notes === 'string' ? srv.notes : '',
+          }))
+      : base.services,
+    policies: Array.isArray(unwrapped.policies)
+      ? unwrapped.policies
+          .map((p) => (typeof p === 'string' ? p : String(p ?? '')))
+          .filter((p) => p.trim().length > 0)
+      : base.policies,
     insurance: {
-      summary: typeof input.insurance?.summary === 'string' ? input.insurance.summary : base.insurance.summary,
-      partners: Array.isArray(input.insurance?.partners) ? input.insurance.partners : base.insurance.partners,
+      summary:
+        typeof unwrapped.insurance?.summary === 'string'
+          ? unwrapped.insurance.summary
+          : base.insurance.summary,
+      partners: Array.isArray(unwrapped.insurance?.partners)
+        ? toStringArray(unwrapped.insurance.partners)
+        : base.insurance.partners,
     },
-    parkingAndAccess: typeof input.parkingAndAccess === 'string' ? input.parkingAndAccess : base.parkingAndAccess,
+    parkingAndAccess:
+      typeof unwrapped.parkingAndAccess === 'string'
+        ? unwrapped.parkingAndAccess
+        : base.parkingAndAccess,
     googleReviews: {
-      placeUrl: typeof input.googleReviews?.placeUrl === 'string' ? input.googleReviews.placeUrl : '',
-      reviews: Array.isArray(input.googleReviews?.reviews) ? input.googleReviews.reviews : [],
+      placeUrl:
+        typeof unwrapped.googleReviews?.placeUrl === 'string'
+          ? unwrapped.googleReviews.placeUrl
+          : '',
+      reviews: Array.isArray(unwrapped.googleReviews?.reviews)
+        ? unwrapped.googleReviews.reviews
+            .filter((rev): rev is NonNullable<typeof rev> => Boolean(rev && typeof rev === 'object'))
+            .map((rev, idx) => ({
+              id: typeof rev.id === 'string' && rev.id.trim() ? rev.id.trim() : `grev-${idx + 1}`,
+              authorName: typeof rev.authorName === 'string' ? rev.authorName : '',
+              rating:
+                typeof rev.rating === 'number' && Number.isFinite(rev.rating)
+                  ? Math.min(5, Math.max(1, Math.round(rev.rating)))
+                  : 5,
+              dateLabel: typeof rev.dateLabel === 'string' ? rev.dateLabel : '',
+              treatmentContext:
+                typeof rev.treatmentContext === 'string' ? rev.treatmentContext : '',
+              quote: typeof rev.quote === 'string' ? rev.quote : '',
+              sourceUrl: typeof rev.sourceUrl === 'string' ? rev.sourceUrl : '',
+            }))
+        : [],
     },
-    updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : new Date().toISOString(),
+    updatedAt: typeof unwrapped.updatedAt === 'string' ? unwrapped.updatedAt : new Date().toISOString(),
   };
 }
 
