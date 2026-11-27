@@ -4,7 +4,7 @@ export const DEFAULT_CLINIC_DATA: ClinicData = {
   clinicName: 'Dentistae Dental Care',
   tagline: 'Banjara Hills Specialty Dental Clinic',
   address: 'Plot 42, Road No. 12, Banjara Hills, Hyderabad, Telangana 500034',
-  landmark: 'Opposite Virinchi Hospital Lane, 400m from KBR National Park',
+  landmark: 'Next to Green Leaf (Opposite Virinchi Hospital Lane, 400m from KBR National Park)',
   phone: '+91 40 2335 8899',
   emergencyPhone: '+91 98490 11223',
   email: 'frontdesk@dentistaehyd.in',
@@ -26,7 +26,7 @@ export const DEFAULT_CLINIC_DATA: ClinicData = {
         'Post & Core Restorations',
         'Digital RVG Diagnostics',
       ],
-      schedule: 'Mon–Sat, 10:00 AM – 6:00 PM',
+      schedule: 'Monday to Saturday (Mon–Sat), 10:00 AM – 6:00 PM',
     },
     {
       id: 'doc-vikram',
@@ -40,7 +40,7 @@ export const DEFAULT_CLINIC_DATA: ClinicData = {
         'Atraumatic Tooth Extractions',
         'Minor Oral & Jaw Surgery',
       ],
-      schedule: 'Mon, Wed, Fri, Sat, 11:00 AM – 7:00 PM',
+      schedule: 'Monday, Wednesday, Friday & Saturday, 11:00 AM – 7:00 PM',
     },
     {
       id: 'doc-meera',
@@ -52,23 +52,23 @@ export const DEFAULT_CLINIC_DATA: ClinicData = {
         'Ultrasonic Dental Cleaning & Polishing',
         'Tooth-Coloured Composite Fillings',
         'In-Office Teeth Whitening',
-        'Preventive Family Oral Check-Ups',
+        'Preventive Family & Pediatric Check-Ups',
       ],
-      schedule: 'Mon–Sat 9:00 AM – 5:00 PM; Sun 10:00 AM – 2:00 PM',
+      schedule: 'Monday to Saturday, 9:00 AM – 5:00 PM; Sunday, 10:00 AM – 2:00 PM',
     },
     {
       id: 'doc-karthik',
       name: 'Dr. Karthikeya Sharma',
       qualification: 'BDS, MDS (Orthodontics & Dentofacial Orthopaedics)',
       registrationNumber: 'TSDC Reg. No. A-16105 · Telangana State Dental Council',
-      specialty: 'Braces & Clear Aligners',
+      specialty: 'Braces, Orthodontics & Clear Aligners',
       expertise: [
-        '3D Clear Aligners',
         'Metal & Ceramic Braces',
+        '3D Clear Aligners',
         'Bite Alignment & Jaw Orthopaedics',
         'Retention & Post-Braces Care',
       ],
-      schedule: 'Tue, Thu, Sat, 2:00 PM – 8:00 PM',
+      schedule: 'Tuesday, Thursday & Saturday, 2:00 PM – 8:00 PM',
     },
   ],
   services: [
@@ -82,13 +82,14 @@ export const DEFAULT_CLINIC_DATA: ClinicData = {
       id: 'srv-xray',
       name: 'Digital Dental X-Ray (RVG)',
       price: '₹300',
-      notes: 'Single tooth digital radiograph.',
+      notes:
+        'Single tooth digital radiograph. Valid for 3 months (recent X-rays taken within the last 3 months are accepted; repeat check X-ray within 3 months covered as advised).',
     },
     {
       id: 'srv-scaling',
       name: 'Scaling & Polishing (Teeth Cleaning)',
       price: '₹1,200',
-      notes: 'Ultrasonic scaling and stain removal.',
+      notes: 'Takes about 45 minutes. Ultrasonic scaling, plaque and stain removal, and polishing.',
     },
     {
       id: 'srv-filling',
@@ -100,7 +101,8 @@ export const DEFAULT_CLINIC_DATA: ClinicData = {
       id: 'srv-rct',
       name: 'Root Canal Treatment (RCT)',
       price: '₹4,500 – ₹6,500',
-      notes: 'Anterior ₹4,500; Molar/re-treatment up to ₹6,500. Crown billed separately.',
+      notes:
+        'Anterior ₹4,500; Molar/re-treatment up to ₹6,500. Dental Crown (Zirconia / Ceramic) billed separately: ₹8,000 – ₹14,000.',
     },
     {
       id: 'srv-crown',
@@ -124,7 +126,7 @@ export const DEFAULT_CLINIC_DATA: ClinicData = {
       id: 'srv-implant',
       name: 'Titanium Dental Implant (Fixture)',
       price: '₹28,000',
-      notes: 'Implant fixture only; prosthetic crown priced separately.',
+      notes: 'Implant fixture only; prosthetic crown priced separately (₹8,000 – ₹14,000).',
     },
     {
       id: 'srv-whitening',
@@ -136,13 +138,40 @@ export const DEFAULT_CLINIC_DATA: ClinicData = {
       id: 'srv-braces',
       name: 'Metal Braces (Full Arch)',
       price: '₹32,000',
-      notes: 'Includes monthly orthodontic adjustments.',
+      notes:
+        'Handled by Dr. Karthikeya Sharma (Tuesday, Thursday & Saturday, 2:00 PM – 8:00 PM). Includes monthly orthodontic adjustments.',
+    },
+    {
+      id: 'srv-ceramic-braces',
+      name: 'Ceramic Braces (Full Arch)',
+      price: '₹45,000',
+      notes:
+        'Tooth-coloured ceramic brackets by Dr. Karthikeya Sharma (Tuesday, Thursday & Saturday, 2:00 PM – 8:00 PM). Includes monthly adjustments.',
     },
     {
       id: 'srv-aligners',
       name: 'Clear Aligners',
       price: 'Starting ₹75,000',
-      notes: 'Final quote after 3D intraoral scan.',
+      notes:
+        'Handled by Dr. Karthikeya Sharma (Tuesday, Thursday & Saturday, 2:00 PM – 8:00 PM). Final quote after 3D intraoral scan.',
+    },
+    {
+      id: 'srv-veneers',
+      name: 'Porcelain Dental Veneers (Per Tooth)',
+      price: '₹12,000 – ₹16,000',
+      notes: 'Custom ceramic smile-design veneer per tooth.',
+    },
+    {
+      id: 'srv-bridge',
+      name: 'Dental Bridge (3-Unit Ceramic / Zirconia)',
+      price: '₹24,000 – ₹36,000',
+      notes: 'Fixed prosthetic replacement for a missing tooth.',
+    },
+    {
+      id: 'srv-pediatric',
+      name: 'Pediatric / Kids Dental Check-up & Fluoride',
+      price: '₹800',
+      notes: 'Gentle oral check-up and preventive fluoride application for children.',
     },
   ],
   policies: [
@@ -155,7 +184,7 @@ export const DEFAULT_CLINIC_DATA: ClinicData = {
   ],
   insurance: {
     summary:
-      'We provide itemised GST invoices, clinical summaries, and pre/post-treatment X-rays for OPD dental reimbursement claims. Direct cashless processing is not available at the clinic counter; patients file reimbursement with their insurer.',
+      'Direct cashless insurance is not available at the clinic counter. We provide an itemised GST bill, clinical summary, and pre/post-treatment X-rays so you can submit a reimbursement claim with your insurer.',
     partners: [
       'Star Health Corporate Dental Rider',
       'HDFC ERGO Optima OPD',
@@ -164,6 +193,6 @@ export const DEFAULT_CLINIC_DATA: ClinicData = {
     ],
   },
   parkingAndAccess:
-    'Complimentary valet parking for cars and two-wheelers at the Road No. 12 entrance. Ground-floor clinic with step-free wheelchair access.',
+    'Basement parking available for cars and two-wheelers — two hours (2 hours) free with clinic validation; complimentary valet at the Road No. 12 entrance. Ground-floor clinic with step-free wheelchair access.',
   updatedAt: new Date().toISOString(),
 };

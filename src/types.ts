@@ -298,8 +298,15 @@ export function normalizeClinicData(
     landmark: pickString(unwrapped.landmark, base.landmark) ?? '',
     phone: pickString(unwrapped.phone, unwrapped.phoneNumber, base.phone) ?? '+91 40 2335 8899',
     emergencyPhone:
-      pickString(unwrapped.emergencyPhone, unwrapped.emergency_phone, base.emergencyPhone) ??
-      '+91 98490 11223',
+      pickString(
+        unwrapped.emergencyPhone,
+        unwrapped.emergency_phone,
+        unwrapped.emergencyNumber,
+        unwrapped.emergency_number,
+        unwrapped.emergencyContact,
+        unwrapped.emergencyLine,
+        base.emergencyPhone,
+      ) ?? '+91 98490 11223',
     email: pickString(unwrapped.email, base.email) ?? 'frontdesk@dentistaehyd.in',
     timings: {
       weekdays:

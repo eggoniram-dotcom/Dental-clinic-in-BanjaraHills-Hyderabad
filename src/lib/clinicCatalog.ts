@@ -251,7 +251,7 @@ export const TREATMENT_PAGES: TreatmentPageSpec[] = [
       },
       {
         q: 'Can I claim OPD insurance reimbursement?',
-        a: 'We provide itemised GST invoices, clinical summaries, and pre/post X-rays so you can submit reimbursement claims to eligible corporate OPD insurers.',
+        a: 'We provide an itemised GST bill, clinical summary, and pre/post X-rays so you can submit a reimbursement claim to eligible corporate OPD insurers.',
       },
     ],
   },

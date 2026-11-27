@@ -84,9 +84,28 @@ export function normalizeClinicData(input: Partial<ClinicData> | null | undefine
     tagline: typeof unwrapped.tagline === 'string' ? unwrapped.tagline : base.tagline,
     address: typeof unwrapped.address === 'string' ? unwrapped.address : base.address,
     landmark: typeof unwrapped.landmark === 'string' ? unwrapped.landmark : base.landmark,
-    phone: typeof unwrapped.phone === 'string' ? unwrapped.phone : base.phone,
-    emergencyPhone:
-      typeof unwrapped.emergencyPhone === 'string' ? unwrapped.emergencyPhone : base.emergencyPhone,
+    phone:
+      typeof unwrapped.phone === 'string'
+        ? unwrapped.phone
+        : typeof (unwrapped as Record<string, unknown>).phoneNumber === 'string'
+          ? String((unwrapped as Record<string, unknown>).phoneNumber)
+          : base.phone,
+    emergencyPhone: (() => {
+      const rec = unwrapped as Record<string, unknown>;
+      for (const key of [
+        'emergencyPhone',
+        'emergency_phone',
+        'emergencyNumber',
+        'emergency_number',
+        'emergencyContact',
+        'emergencyLine',
+      ]) {
+        if (typeof rec[key] === 'string' && String(rec[key]).trim()) {
+          return String(rec[key]).trim();
+        }
+      }
+      return base.emergencyPhone;
+    })(),
     email: typeof unwrapped.email === 'string' ? unwrapped.email : base.email,
     timings: {
       weekdays:
